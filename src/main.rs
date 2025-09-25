@@ -1,12 +1,17 @@
-pub mod parser;
-mod ui;
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use iced::Size;
-use ui::app::CoverUI;
+mod api;
+mod app;
+mod parser;
 
+use app::iced_app::CoverUI;
+use iced::{Size, window::icon};
+
+// #[tokio::main]
+// async fn main() {}
 fn main() -> iced::Result {
     let init_size = (800.0, 600.0);
-    iced::application("foo", CoverUI::update, CoverUI::view)
+    iced::application("Mass CoverArt", CoverUI::update, CoverUI::view)
         .window_size(Size::new(init_size.0, init_size.1))
         .theme(CoverUI::theme)
         .subscription(CoverUI::subscription)
@@ -14,6 +19,7 @@ fn main() -> iced::Result {
         .run_with(move || CoverUI::init(init_size))
     // .run()
 
+    // let pic_data: Vec<u8> = read(path).unwrap();
     // let req = reqwest::get("https://img.youtube.com/vi/4PDoT7jtxmw/mqdefault.jpg")
     //     .await
     //     .unwrap();
