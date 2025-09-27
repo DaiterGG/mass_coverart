@@ -5,10 +5,14 @@ mod app;
 mod parser;
 
 use app::iced_app::CoverUI;
-use iced::{Size, window::icon};
+use iced::Size;
+
+pub type ImgHandle = iced::widget::image::Handle;
+pub type TaskHandle = iced::task::Handle;
 
 // #[tokio::main]
-// async fn main() {}
+// async fn main() {
+// }
 fn main() -> iced::Result {
     let init_size = (800.0, 600.0);
     iced::application("Mass CoverArt", CoverUI::update, CoverUI::view)

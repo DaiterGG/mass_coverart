@@ -8,6 +8,11 @@ use std::{
 use audiotags::{AudioTag, Tag};
 use thiserror::Error;
 
+use crate::app::{
+    iced_app::CoverUI,
+    song::{Song, SongId},
+};
+
 #[derive(Debug)]
 pub enum RegexType {
     Album,
@@ -48,21 +53,19 @@ impl RegexType {
         };
     }
 }
-pub enum EndFormat {
-    Jpeg,
-    Png,
-}
 
 pub struct ImageSettings {
-    pub convert_to: EndFormat,
-    pub downscale: (i32, i32),
+    pub downscale: i32,
+    pub square: bool,
+    pub jpg: bool,
 }
 
 impl Default for ImageSettings {
     fn default() -> Self {
         Self {
-            downscale: (1200, 1200),
-            convert_to: EndFormat::Jpeg,
+            downscale: 1200,
+            jpg: true,
+            square: true,
         }
     }
 }
@@ -108,95 +111,95 @@ impl TagData {
         println!("{:?}", self.album);
     }
 }
-pub struct FileParser;
-impl FileParser {
-    pub fn get_tags_data(path: PathBuf, set: &ParseSettings) -> Result<Vec<TagData>, Error> {
-        let mut pair = Self::parse_path(path, set.recursive)?;
-        let mut log = pair.1.rsplitn(30, '\n').collect::<Vec<&str>>();
-        log.pop();
-        println!("{}", log.join("\n"));
-        for file in &mut pair.0 {
-            Self::parse_tags(file, set);
-            file.print();
-        }
-        Ok(pair.0)
+pub fn get_tags_data(path: PathBuf, set: &ParseSettings) -> Result<Vec<TagData>, Error> {
+    let mut pair = parse_path(path, set.recursive)?;
+    let mut log = pair.1.rsplitn(30, '\n').collect::<Vec<&str>>();
+    log.pop();
+    println!("{}", log.join("\n"));
+    for file in &mut pair.0 {
+        parse_tags(file, set);
+        file.print();
     }
-    pub fn parse_tags(data: &mut TagData, set: &ParseSettings) {
-        data.artist = data.file.artist().map(|s| s.to_string());
-        data.title = data.file.title().map(|s| s.to_string());
-        data.album = data.file.album_title().map(|s| s.to_string());
-        if !set.parse_file_name {
-            return;
+    Ok(pair.0)
+}
+pub fn parse_tags(data: &mut TagData, set: &ParseSettings) {
+    data.artist = data.file.artist().map(|s| s.to_string());
+    data.title = data.file.title().map(|s| s.to_string());
+    data.album = data.file.album_title().map(|s| s.to_string());
+    if !set.parse_file_name {
+        return;
+    }
+    let mut remaider = data.path.file_stem().unwrap().to_string_lossy().to_string();
+    for i in 0..set.reg_separators.len() {
+        let sep = &set.reg_separators[i];
+        if let Some((entry, rest)) = remaider.split_once(sep) {
+            set.reg_keys[i].reg_to_settings(entry, data);
+            remaider = rest.to_string();
         }
-        let mut remaider = data.path.file_stem().unwrap().to_string_lossy().to_string();
-        for i in 0..set.reg_separators.len() {
-            let sep = &set.reg_separators[i];
-            if let Some((entry, rest)) = remaider.split_once(sep) {
-                set.reg_keys[i].reg_to_settings(entry, data);
-                remaider = rest.to_string();
+    }
+    set.reg_keys
+        .last()
+        .unwrap()
+        .reg_to_settings(&remaider, data);
+}
+pub fn parse_path(path: PathBuf, rec: bool) -> Result<(Vec<TagData>, String), Error> {
+    let mut log = "".to_string();
+    let mut all_files: Vec<TagData> = Vec::new();
+    let p: &Path = path.as_ref();
+    if p.is_file() {
+        let res = parse_file(path);
+        match res {
+            Ok(file) => all_files.push(file),
+            // skip errors on individual files
+            Err(e) => {
+                log.push_str(&e.to_string());
+                log.push('\n');
             }
         }
-        set.reg_keys
-            .last()
-            .unwrap()
-            .reg_to_settings(&remaider, data);
-    }
-    pub fn parse_path(path: PathBuf, rec: bool) -> Result<(Vec<TagData>, String), Error> {
-        let mut log = "".to_string();
-        let mut all_files: Vec<TagData> = Vec::new();
-        let p: &Path = path.as_ref();
-        if p.is_file() {
-            let res = Self::parse_file(path);
+    } else if p.is_dir() {
+        let all = read_dir(path)?;
+        for item in all {
+            let item = item?.path();
+            if !rec && item.is_dir() {
+                continue;
+            }
+            let res = parse_path(item, true);
             match res {
-                Ok(file) => all_files.push(file),
-                // skip errors on individual files
-                Err(e) => {
-                    log.push_str(&e.to_string());
-                    log.push('\n');
+                Ok((mut files, l)) => {
+                    all_files.append(&mut files);
+                    log.push_str(&l);
                 }
+                // skip errors in subdir
+                Err(e) => log.push_str(&e.to_string()),
             }
-        } else if p.is_dir() {
-            let all = read_dir(path)?;
-            for item in all {
-                let item = item?.path();
-                if !rec && item.is_dir() {
-                    continue;
-                }
-                let res = Self::parse_path(item, true);
-                match res {
-                    Ok((mut files, l)) => {
-                        all_files.append(&mut files);
-                        log.push_str(&l);
-                    }
-                    // skip errors in subdir
-                    Err(e) => log.push_str(&e.to_string()),
-                }
-            }
-        } else if p.is_symlink() {
-            log.push_str("Root folder cannot be a Symlink\n");
-            bail!(log);
-        } else {
-            log.push_str("Unknown error\n");
-            bail!(log);
         }
-        if all_files.is_empty() {
-            log.push_str("Music files was not found\n");
-            bail!(log);
-        }
-        Ok((all_files, log))
+    } else if p.is_symlink() {
+        log.push_str("Root folder cannot be a Symlink\n");
+        bail!(log);
+    } else {
+        log.push_str("Unknown error\n");
+        bail!(log);
     }
-    pub fn parse_file(path: PathBuf) -> Result<TagData, Error> {
-        let file = Tag::new().read_from_path(&path)?;
-        Ok(TagData::new(path, file))
+    if all_files.is_empty() {
+        log.push_str("Music files was not found\n");
+        bail!(log);
     }
-    pub fn is_rtl(s: &str) -> bool {
-        let cs = s.chars();
-        for c in cs {
-            match c {
-                '\u{590}'..='\u{8FF}' | '\u{10800}'..='\u{11000}' => return true,
-                _ => (),
-            };
-        }
-        return false;
+    Ok((all_files, log))
+}
+pub fn parse_file(path: PathBuf) -> Result<TagData, Error> {
+    let file = Tag::new().read_from_path(&path)?;
+    Ok(TagData::new(path, file))
+}
+pub fn is_rtl(s: &str) -> bool {
+    let cs = s.chars();
+    for c in cs {
+        match c {
+            '\u{590}'..='\u{8FF}' | '\u{10800}'..='\u{11000}' => return true,
+            _ => (),
+        };
     }
+    false
+}
+pub fn apply_selected(ui: &mut CoverUI, id: SongId) {
+    //
 }

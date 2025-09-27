@@ -1,30 +1,32 @@
 use iced::{
     Element,
-    Length::{Fill, FillPortion},
+    Length::Fill,
     Renderer, Theme,
     alignment::Vertical,
     widget::{
-        Column, Container, Row, button, column, container,
-        image::Handle,
+        Column, Container, MouseArea, Row, Space, button, center, column, container, mouse_area,
         row,
         scrollable::{Direction, Scrollbar},
         text, text_input,
     },
 };
+use rand::RngCore;
 
 use crate::{
-    api::queue::ImgData,
+    TaskHandle,
     app::{
-        iced_app::{BTN_SIZE, CoverUI, INNER_TEXT_SIZE, Message, TEXT_SIZE},
-        styles::{button_st, input_st, item_cont_st, list_scroll_st},
+        iced_app::{CoverUI, Message},
+        song_img::{ImgHash, SongImg},
+        styles::{button_st, image_selected_st, img_scroll_st, input_st, item_cont_st},
+        view::{BTN_SIZE, INNER_TEXT_SIZE, TEXT_SIZE},
     },
-    parser::file_parser::{FileParser, TagData},
+    parser::file_parser::{TagData, is_rtl},
 };
 use iced::widget::image;
 use iced::widget::scrollable;
 
 const CONFIRM_H: f32 = 140.0;
-const MAIN_H: f32 = 300.0;
+const MAIN_H: f32 = 350.0;
 const INFO_COLUMN_GAP: f32 = 6.0;
 const INFO_ROW_GAP: f32 = 6.0;
 const ART_ROW_H: f32 = 200.0;
@@ -47,11 +49,26 @@ impl SongState {
     }
 }
 
+/// Hash to check, when async queue return data
+pub type SongHash = u64;
 pub type SongId = usize;
+pub type GroupSize = i32;
+
 pub struct Song {
     pub tag_data: TagData,
     pub state: SongState,
-    pub imgs: Vec<ImgData>,
+    pub queue_handle: Option<TaskHandle>,
+    pub hash: SongHash,
+    pub menu_img: ImgHash,
+    pub selected_img: ImgHash,
+    /// size of groups, used to sort imgs when new one is added
+    /// ```text
+    /// [ |----gr1 = 3 ---|,|gr2 = 2 -| ]
+    /// [ img1, img2, img3, img4, img5, img6 ]
+    /// ```
+    pub img_groups: Vec<i32>,
+    /// Images ordered for display
+    pub imgs: Vec<SongImg>,
 }
 
 impl Song {
@@ -59,8 +76,19 @@ impl Song {
         Self {
             tag_data,
             state: SongState::Confirm,
+            queue_handle: None,
+            hash: rand::rng().next_u64(),
+            menu_img: 0,
+            selected_img: 0,
+            img_groups: Vec::new(),
             imgs: Vec::new(),
         }
+    }
+    pub fn unselect(&mut self) {
+        self.selected_img = 0;
+    }
+    pub fn menu_close(&mut self) {
+        self.menu_img = 0;
     }
     pub fn generate_view_list(ui: &CoverUI) -> iced::widget::Column<'_, Message> {
         let mut list = column![].padding(8).spacing(5);
@@ -82,17 +110,16 @@ impl Song {
         for i in 0..ui.state.songs.len() {
             let h = ui.state.songs[i].state.state_to_h();
             if real_h >= start && real_h <= end && h > 0.0 {
-                list = list.push(ui.state.songs[i].generate_list_item(i, ui));
+                list = list.push(Self::generate_list_item(i, ui));
             } else if h > 0.0 {
-                list = list.push(container("").height(h));
+                list = list.push(Space::new(0, h));
             }
             real_h += h;
         }
         list
     }
     pub fn generate_list_item<'a>(
-        &self,
-        iter_id: usize,
+        id: SongId,
         ui: &CoverUI,
     ) -> Container<'a, Message, Theme, Renderer> {
         use Message::*;
@@ -104,11 +131,12 @@ impl Song {
                 .wrapping(text::Wrapping::None)
         };
 
-        let mut path_str = self.tag_data.path.as_path().to_string_lossy().to_string();
+        let this = &ui.state.songs[id];
+        let mut path_str = this.tag_data.path.as_path().to_string_lossy().to_string();
         limit_path(&mut path_str);
 
-        let artist = self.tag_data.artist.clone().unwrap_or("".to_string());
-        let artist = if FileParser::is_rtl(&artist) {
+        let artist = this.tag_data.artist.clone().unwrap_or("".to_string());
+        let artist = if is_rtl(&artist) {
             Element::from(
                 text(artist)
                     .color(ui.theme().extended_palette().background.base.text)
@@ -120,13 +148,13 @@ impl Song {
                 text_input("Not found", &artist)
                     .style(input_st)
                     .width(Fill)
-                    .on_input(move |s| ArtistInput(iter_id, s))
+                    .on_input(move |s| ArtistInput(id, s))
                     .size(INNER_TEXT_SIZE),
             )
         };
 
-        let title = self.tag_data.title.clone().unwrap_or("".to_string());
-        let title = if FileParser::is_rtl(&title) {
+        let title = this.tag_data.title.clone().unwrap_or("".to_string());
+        let title = if is_rtl(&title) {
             Element::from(
                 text(title)
                     .color(ui.theme().extended_palette().background.base.text)
@@ -138,13 +166,13 @@ impl Song {
                 text_input("Not found", &title)
                     .style(input_st)
                     .width(Fill)
-                    .on_input(move |s| TitleInput(iter_id, s))
+                    .on_input(move |s| TitleInput(id, s))
                     .size(INNER_TEXT_SIZE),
             )
         };
 
-        let album = self.tag_data.album.clone().unwrap_or("".to_string());
-        let album = if FileParser::is_rtl(&album) {
+        let album = this.tag_data.album.clone().unwrap_or("".to_string());
+        let album = if is_rtl(&album) {
             Element::from(
                 text(album)
                     .color(ui.theme().extended_palette().primary.base.text)
@@ -156,7 +184,7 @@ impl Song {
                 text_input("Not found", &album)
                     .style(input_st)
                     .width(Fill)
-                    .on_input(move |s| AlbumInput(iter_id, s))
+                    .on_input(move |s| AlbumInput(id, s))
                     .size(INNER_TEXT_SIZE),
             )
         };
@@ -171,7 +199,7 @@ impl Song {
             .line_height(INFO_LINE_H)
             .size(TEXT_SIZE);
         let btn = |s| button(h3(s).center()).clip(true).height(BTN_SIZE);
-        let cont = match self.state {
+        let cont = match this.state {
             SongState::Confirm => container(
                 row![
                     column![
@@ -204,11 +232,11 @@ impl Song {
                         btn("confirm")
                             .width(Fill)
                             .style(button_st)
-                            .on_press(ConfirmSong(iter_id)),
-                        btn("close")
+                            .on_press(ConfirmSong(id)),
+                        btn("remove")
                             .width(Fill)
                             .style(button_st)
-                            .on_press(DiscardSong(iter_id)),
+                            .on_press(DiscardSong(id)),
                     ]
                     .spacing(INFO_COLUMN_GAP)
                     .width(80),
@@ -217,27 +245,41 @@ impl Song {
                 .spacing(INFO_ROW_GAP),
             )
             .height(CONFIRM_H),
-            SongState::Main => container(row![
-                Column::new()
-                    .push(row![path_label, path].spacing(INFO_ROW_GAP))
-                    .push(self.image_row())
-                    // row![],
-                    //
+            SongState::Main => container(column![
+                row![path_label, path].spacing(INFO_ROW_GAP),
+                row![
+                    Column::new()
+                        .push(Self::image_row(ui, id))
+                        .push(
+                            text("Update tags")
+                                .size(TEXT_SIZE)
+                                .color(ui.theme().extended_palette().background.weak.text)
+                                .height(BTN_SIZE)
+                                .line_height(INFO_LINE_H)
+                        )
+                        // row![],
+                        //
+                        .spacing(INFO_COLUMN_GAP)
+                        .height(Fill),
+                    column![
+                        btn("accept selected")
+                            .width(Fill)
+                            .style(button_st)
+                            .on_press(Accept(id)),
+                        btn("back to tags")
+                            .width(Fill)
+                            .clip(true)
+                            .style(button_st)
+                            .on_press(GoBack(id)),
+                        btn("remove")
+                            .width(Fill)
+                            .style(button_st)
+                            .on_press(GoBackDiscard(id)),
+                    ]
                     .spacing(INFO_COLUMN_GAP)
-                    .height(Fill),
-                column![
-                    btn("accept selected")
-                        .width(Fill)
-                        .style(button_st)
-                        .on_press(Exit),
-                    btn("back to tags")
-                        .width(Fill)
-                        .style(button_st)
-                        .on_press(Exit),
-                    btn("close").width(Fill).style(button_st).on_press(Exit),
+                    .width(120),
                 ]
                 .spacing(INFO_COLUMN_GAP)
-                .width(80),
             ])
             .height(MAIN_H),
             SongState::Hidden => panic!("Cannot draw hidden song"),
@@ -245,26 +287,71 @@ impl Song {
         cont.style(item_cont_st).width(Fill).padding(10)
     }
 
-    fn image_row<'a>(&self) -> iced::widget::Scrollable<'a, Message> {
+    fn image_row<'a>(ui: &CoverUI, id: SongId) -> iced::widget::Scrollable<'a, Message> {
         let mut row = Row::new();
-        for img in &self.imgs {
-            match img {
-                ImgData::Path(p) => {}
-                ImgData::PreviewPathUrl(path, url) => {}
-                ImgData::Bytes(bytes, format) => {
-                    row = row.push(image(bytes).content_fit(iced::ContentFit::Contain));
-                }
-            }
+        let this = &ui.state.songs[id];
+
+        for i in 0..this.imgs.len() {
+            row = row.push(Self::image_box(ui, id, i));
         }
         scrollable(row)
             .direction(Direction::Horizontal(
                 Scrollbar::new().margin(0).scroller_width(15),
             ))
             .width(Fill)
-            .height(ART_ROW_H)
             .spacing(10)
-            // .on_scroll(|v| Offset(v.relative_offset().y))
-            .style(list_scroll_st)
+            .style(img_scroll_st)
+    }
+
+    fn image_box<'a>(ui: &CoverUI, id: SongId, img_iter: usize) -> MouseArea<'a, Message> {
+        let this = &ui.state.songs[id];
+        let img = &this.imgs[img_iter];
+        let border = this.selected_img == img.hash;
+        let (w, h) = img.resolution();
+
+        let mut cont = if this.menu_img == img.hash {
+            center(
+                column![
+                    center(
+                        column![
+                            button(text("select").size(INNER_TEXT_SIZE).center())
+                                .on_press(Message::ImgSelect(id, img.hash))
+                                .height(BTN_SIZE)
+                                .width(70)
+                                .style(button_st),
+                            button(text("preview").size(INNER_TEXT_SIZE).center())
+                                .on_press(Message::ImgPreview(id, img_iter))
+                                .height(BTN_SIZE)
+                                .width(70)
+                                .style(button_st),
+                        ]
+                        .spacing(INFO_ROW_GAP)
+                    )
+                    .width(Fill),
+                    column![
+                        text(format!("{}x{}", w, h))
+                            .size(INNER_TEXT_SIZE)
+                            .center()
+                            .width(Fill),
+                        text(format!("{}", img.src))
+                            .size(INNER_TEXT_SIZE)
+                            .center()
+                            .width(Fill),
+                    ]
+                    .spacing(INFO_ROW_GAP)
+                ]
+                .padding(20)
+                .spacing(20),
+            )
+        } else {
+            center(image(img.handle.clone()).content_fit(iced::ContentFit::Contain)).padding(10)
+        };
+        if border {
+            cont = cont.style(image_selected_st);
+        }
+        mouse_area(cont.width(ART_ROW_H).height(ART_ROW_H))
+            .on_press(Message::ImgMenuToggle(true, id, img.hash))
+            .on_exit(Message::ImgMenuToggle(false, id, img.hash))
     }
 }
 
