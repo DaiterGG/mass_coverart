@@ -1,5 +1,3 @@
-use std::time::{Duration, Instant};
-
 use anyhow::{Error, bail};
 use iced::{
     futures::channel::mpsc::{Sender, TrySendError},
@@ -116,11 +114,7 @@ async fn get_img(
     }
 
     let mut tried = tx.try_send(Message::FromQueue(crate::api::queue::QueueMessage::GotArt(
-        ReturnSongImg::new(
-            id,
-            hash,
-            SongImg::new(Handle::from_bytes(pic), Jpg, Youtube),
-        ),
+        ReturnSongImg::new(id, hash, SongImg::new(pic, Jpg, Youtube)),
     )));
     loop {
         if let Err(e) = tried

@@ -1,11 +1,15 @@
 use iced::{
-    Alignment, Element,
+    Alignment::{self, Center},
+    Element,
     Length::{Fill, FillPortion},
     Theme,
-    alignment::Horizontal,
+    alignment::Horizontal::{self, Right},
     widget::{
+        MouseArea, Space,
         checkbox::Icon,
-        column, container, row,
+        column, container,
+        image::Viewer,
+        row,
         scrollable::{Direction, Scrollbar},
     },
 };
@@ -162,7 +166,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             container("").width(10),
             text_input("", &ui.state.img_settings.downscale.to_string())
                 .style(input_st)
-                .width(50)
+                .width(60)
                 .align_x(Alignment::Center)
                 .size(INNER_TEXT_SIZE)
                 .on_input(DownscaleInput),
@@ -202,9 +206,16 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         ))
         .width(Fill)
         .height(Fill)
-        .spacing(0)
+        .spacing(9)
         .on_scroll(|v| Offset(v.relative_offset().y))
         .style(list_scroll_st);
+    // let size = 50;
+    // let scroll = 30;
+    // let bar = column![
+    //     Space::new(0, scroll),
+    //     button("a").style(scroll_bar_st).width(15).height(size),
+    //     Space::new(0, 6)
+    // ];
     let drag_info = if ui.state.songs.is_empty() {
         text("Drag and drop")
             .center()
@@ -215,12 +226,20 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         text("")
     };
     let list = stack![
-        container(drag_info)
-            .width(Fill)
-            .height(Fill)
-            .style(list_bg_st),
-        row![list, text("").width(4)],
-        container("").width(Fill).height(Fill).style(list_border_st)
+        container("").width(Fill).height(Fill),
+        row![
+            container(drag_info)
+                .width(Fill)
+                .height(Fill)
+                .style(list_bg_st),
+            Space::new(20, 0)
+        ],
+        list,
+        // row![list, text("").width(4)].width(Fill).height(Fill),
+        row![
+            container("").width(Fill).height(Fill).style(list_border_st),
+            Space::new(20, 0)
+        ],
     ];
 
     let main_col = column![
@@ -230,6 +249,33 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
     .height(Fill)
     .width(Fill)
     .padding(15);
+    let preview = if let Some(prev) = &ui.state.preview_img {
+        container(stack![
+            button("")
+                .style(preview_close_st)
+                .on_press(ImgPreviewClose)
+                .height(Fill)
+                .width(Fill),
+            column![
+                Space::new(0, FillPortion(1)),
+                row![
+                    Space::new(FillPortion(1), 0),
+                    container(Viewer::new(prev).height(Fill).width(Fill))
+                        .style(preview_box_st)
+                        .padding(6)
+                        .width(FillPortion(6))
+                        .height(FillPortion(6)),
+                    Space::new(FillPortion(1), 0),
+                ],
+                Space::new(0, FillPortion(1)),
+            ]
+            .height(Fill)
+            .width(Fill),
+        ])
+    } else {
+        container("")
+    };
+    let mian_stack = stack![main_col, preview];
 
     if ui.state.ui_blocked {
         container(
@@ -243,7 +289,19 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         .width(Fill)
         .style(filler_st)
         .into()
+    } else if ui.state.ui_loading {
+        container(
+            text("Loading...")
+                .center()
+                .size(50)
+                .height(Fill)
+                .width(Fill),
+        )
+        .height(Fill)
+        .width(Fill)
+        .style(filler_st)
+        .into()
     } else {
-        main_col.into()
+        mian_stack.into()
     }
 }

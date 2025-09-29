@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use iced::{
     Element,
     Length::Fill,
@@ -13,14 +14,17 @@ use iced::{
 use rand::RngCore;
 
 use crate::{
-    TaskHandle,
+    ImgHandle, TaskHandle,
     app::{
         iced_app::{CoverUI, Message},
-        song_img::{ImgHash, SongImg},
+        song_img::{ImgHash, ImgId, SongImg},
         styles::{button_st, image_selected_st, img_scroll_st, input_st, item_cont_st},
         view::{BTN_SIZE, INNER_TEXT_SIZE, TEXT_SIZE},
     },
-    parser::file_parser::{TagData, is_rtl},
+    parser::{
+        file_parser::{TagData, is_rtl},
+        image_parser::original_image_preview,
+    },
 };
 use iced::widget::image;
 use iced::widget::scrollable;
@@ -30,10 +34,11 @@ const MAIN_H: f32 = 350.0;
 const INFO_COLUMN_GAP: f32 = 6.0;
 const INFO_ROW_GAP: f32 = 6.0;
 const ART_ROW_H: f32 = 200.0;
+const ART_WH: f32 = ART_ROW_H - 20.0;
 const INFO_LINE_H: f32 = 1.6;
 const CENTER_OFFSET: f32 = 1500.0;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SongState {
     Confirm,
     Main,
@@ -54,10 +59,12 @@ pub type SongHash = u64;
 pub type SongId = usize;
 pub type GroupSize = i32;
 
+#[derive(Debug, Clone)]
 pub struct Song {
     pub tag_data: TagData,
     pub state: SongState,
     pub queue_handle: Option<TaskHandle>,
+    pub original_art: Option<ImgHandle>,
     pub hash: SongHash,
     pub menu_img: ImgHash,
     pub selected_img: ImgHash,
@@ -74,9 +81,10 @@ pub struct Song {
 impl Song {
     pub fn new(tag_data: TagData) -> Self {
         Self {
-            tag_data,
             state: SongState::Confirm,
             queue_handle: None,
+            original_art: original_image_preview(&tag_data),
+            tag_data,
             hash: rand::rng().next_u64(),
             menu_img: 0,
             selected_img: 0,
@@ -175,7 +183,7 @@ impl Song {
         let album = if is_rtl(&album) {
             Element::from(
                 text(album)
-                    .color(ui.theme().extended_palette().primary.base.text)
+                    .color(ui.theme().extended_palette().background.base.text)
                     .width(Fill)
                     .size(INNER_TEXT_SIZE),
             )
@@ -188,6 +196,7 @@ impl Song {
                     .size(INNER_TEXT_SIZE),
             )
         };
+
         let path_label = text("path:")
             .size(TEXT_SIZE)
             .height(BTN_SIZE)
@@ -223,9 +232,19 @@ impl Song {
                     .spacing(INFO_COLUMN_GAP),
                     column![
                         path,
-                        container(title).height(BTN_SIZE),
-                        container(album).height(BTN_SIZE),
-                        container(artist).height(BTN_SIZE),
+                        row![
+                            column![
+                                container(title).height(BTN_SIZE),
+                                container(album).height(BTN_SIZE),
+                                container(artist).height(BTN_SIZE),
+                            ]
+                            .spacing(INFO_COLUMN_GAP),
+                            if let Some(cover) = &ui.state.songs[id].original_art {
+                                row![Space::new(INFO_COLUMN_GAP, 0), container(image(cover))]
+                            } else {
+                                row![]
+                            }
+                        ]
                     ]
                     .spacing(INFO_COLUMN_GAP),
                     column![
@@ -288,7 +307,7 @@ impl Song {
     }
 
     fn image_row<'a>(ui: &CoverUI, id: SongId) -> iced::widget::Scrollable<'a, Message> {
-        let mut row = Row::new();
+        let mut row = Row::new().height(ART_ROW_H);
         let this = &ui.state.songs[id];
 
         for i in 0..this.imgs.len() {
@@ -303,12 +322,12 @@ impl Song {
             .style(img_scroll_st)
     }
 
-    fn image_box<'a>(ui: &CoverUI, id: SongId, img_iter: usize) -> MouseArea<'a, Message> {
+    fn image_box<'a>(ui: &CoverUI, id: SongId, img_iter: ImgId) -> MouseArea<'a, Message> {
         let this = &ui.state.songs[id];
         let img = &this.imgs[img_iter];
         let border = this.selected_img == img.hash;
-        let (w, h) = img.resolution();
-
+        let (w, h) = img.orig_res;
+        // dbg!(img.bytes());
         let mut cont = if this.menu_img == img.hash {
             center(
                 column![
@@ -344,7 +363,13 @@ impl Song {
                 .spacing(20),
             )
         } else {
-            center(image(img.handle.clone()).content_fit(iced::ContentFit::Contain)).padding(10)
+            center(
+                image(img.preview.as_ref().unwrap())
+                    .content_fit(iced::ContentFit::Contain)
+                    .width(ART_WH)
+                    .height(ART_WH),
+            )
+            .padding(10)
         };
         if border {
             cont = cont.style(image_selected_st);

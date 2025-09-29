@@ -1,6 +1,6 @@
 [package]
 name = "mass_coverart"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -17,6 +17,7 @@ reqwest = "0.12.23"
 rfd = "0.15.4"
 thiserror = "2.0.16"
 tokio = "1.47.1"
+tokio-stream = "0.1.17"
 yt-search = "0.1.1"
 
 

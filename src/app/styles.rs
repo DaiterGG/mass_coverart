@@ -56,6 +56,14 @@ pub fn miasma_theme() -> Theme {
     )
 }
 
+pub fn preview_close_st(theme: &Theme, status: button::Status) -> button::Style {
+    let palette = theme.extended_palette();
+
+    button::Style {
+        background: Some(Color::from_rgba8(0, 0, 0, 0.7).into()),
+        ..button::Style::default()
+    }
+}
 pub fn button_st(theme: &Theme, status: button::Status) -> button::Style {
     let palette = theme.extended_palette();
 
@@ -148,6 +156,20 @@ pub fn add_remove(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+pub fn preview_box_st(theme: &Theme) -> container::Style {
+    let p = theme.extended_palette();
+
+    container::Style {
+        background: Some(p.background.strong.color.into()),
+        border: Border {
+            width: 1.0,
+            radius: 10.0.into(),
+            color: p.danger.base.color,
+        },
+        text_color: Some(p.background.base.color),
+        ..container::Style::default()
+    }
+}
 pub fn list_bg_st(theme: &Theme) -> container::Style {
     let p = theme.extended_palette();
 
@@ -173,7 +195,7 @@ pub fn list_scroll_st(theme: &Theme, status: scrollable::Status) -> scrollable::
             is_vertical_scrollbar_dragged,
             ..
         } if is_vertical_scrollbar_dragged => p.primary.base.color,
-        _ => p.background.base.color,
+        _ => p.background.strong.color,
     };
     let rail = Rail {
         background: None,
@@ -260,6 +282,24 @@ pub fn blank_button(theme: &Theme, status: button::Status) -> button::Style {
             width: 0.0,
             radius: 0.0.into(),
             color: p.primary.base.color,
+        },
+        ..button::Style::default()
+    }
+}
+pub fn scroll_bar_st(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.extended_palette();
+
+    let bg = match status {
+        button::Status::Hovered => p.primary.weak.color,
+        button::Status::Pressed => p.primary.base.color,
+        _ => p.background.base.color,
+    };
+    button::Style {
+        background: Some(bg.into()),
+        border: Border {
+            width: 1.0,
+            radius: 10.0.into(),
+            color: p.background.weak.color,
         },
         ..button::Style::default()
     }

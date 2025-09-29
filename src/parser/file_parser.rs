@@ -1,19 +1,24 @@
 use anyhow::{Error, bail};
 use iced::Length::Fill;
+use rfd::FileHandle;
 use std::{
+    fmt::Debug,
     fs::{read, read_dir},
     path::{Path, PathBuf},
 };
 
-use audiotags::{AudioTag, Tag};
+use audiotags::{AudioTag, Picture, Tag};
 use thiserror::Error;
 
-use crate::app::{
-    iced_app::CoverUI,
-    song::{Song, SongId},
+use crate::{
+    app::{
+        iced_app::CoverUI,
+        song::{Song, SongId},
+    },
+    parser::image_parser::final_img,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RegexType {
     Album,
     Title,
@@ -54,21 +59,7 @@ impl RegexType {
     }
 }
 
-pub struct ImageSettings {
-    pub downscale: i32,
-    pub square: bool,
-    pub jpg: bool,
-}
-
-impl Default for ImageSettings {
-    fn default() -> Self {
-        Self {
-            downscale: 1200,
-            jpg: true,
-            square: true,
-        }
-    }
-}
+#[derive(Clone, Debug)]
 pub struct ParseSettings {
     pub recursive: bool,
     pub parse_file_name: bool,
@@ -89,10 +80,20 @@ impl Default for ParseSettings {
 pub type FileData = Box<dyn AudioTag + Send + Sync + 'static>;
 pub struct TagData {
     pub path: PathBuf,
-    file: FileData,
+    pub file: FileData,
     pub artist: Option<String>,
     pub title: Option<String>,
     pub album: Option<String>,
+}
+impl Debug for TagData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+impl Clone for TagData {
+    fn clone(&self) -> Self {
+        panic!("should not be cloned")
+    }
 }
 impl TagData {
     fn new(path: PathBuf, file: FileData) -> Self {
@@ -104,23 +105,20 @@ impl TagData {
             album: None,
         }
     }
-    fn print(&self) {
-        println!("{:?}", self.path);
-        println!("{:?}", self.artist);
-        println!("{:?}", self.title);
-        println!("{:?}", self.album);
-    }
 }
-pub fn get_tags_data(path: PathBuf, set: &ParseSettings) -> Result<Vec<TagData>, Error> {
-    let mut pair = parse_path(path, set.recursive)?;
-    let mut log = pair.1.rsplitn(30, '\n').collect::<Vec<&str>>();
-    log.pop();
-    println!("{}", log.join("\n"));
-    for file in &mut pair.0 {
-        parse_tags(file, set);
-        file.print();
+pub async fn get_tags_data(
+    path_vec: Vec<FileHandle>,
+    set: ParseSettings,
+) -> Result<Vec<TagData>, Error> {
+    let mut ret = Vec::new();
+    for path in path_vec {
+        let mut tags = parse_path(path.into(), set.recursive)?;
+        for file in &mut tags {
+            parse_tags(file, &set);
+        }
+        ret.append(&mut tags);
     }
-    Ok(pair.0)
+    Ok(ret)
 }
 pub fn parse_tags(data: &mut TagData, set: &ParseSettings) {
     data.artist = data.file.artist().map(|s| s.to_string());
@@ -142,8 +140,7 @@ pub fn parse_tags(data: &mut TagData, set: &ParseSettings) {
         .unwrap()
         .reg_to_settings(&remaider, data);
 }
-pub fn parse_path(path: PathBuf, rec: bool) -> Result<(Vec<TagData>, String), Error> {
-    let mut log = "".to_string();
+pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<TagData>, Error> {
     let mut all_files: Vec<TagData> = Vec::new();
     let p: &Path = path.as_ref();
     if p.is_file() {
@@ -151,10 +148,7 @@ pub fn parse_path(path: PathBuf, rec: bool) -> Result<(Vec<TagData>, String), Er
         match res {
             Ok(file) => all_files.push(file),
             // skip errors on individual files
-            Err(e) => {
-                log.push_str(&e.to_string());
-                log.push('\n');
-            }
+            Err(_) => {}
         }
     } else if p.is_dir() {
         let all = read_dir(path)?;
@@ -165,26 +159,22 @@ pub fn parse_path(path: PathBuf, rec: bool) -> Result<(Vec<TagData>, String), Er
             }
             let res = parse_path(item, true);
             match res {
-                Ok((mut files, l)) => {
+                Ok(mut files) => {
                     all_files.append(&mut files);
-                    log.push_str(&l);
                 }
                 // skip errors in subdir
-                Err(e) => log.push_str(&e.to_string()),
+                Err(_) => {}
             }
         }
     } else if p.is_symlink() {
-        log.push_str("Root folder cannot be a Symlink\n");
-        bail!(log);
+        bail!("Root folder cannot be a Symlink\n");
     } else {
-        log.push_str("Unknown error\n");
-        bail!(log);
+        bail!("Unknown error\n");
     }
     if all_files.is_empty() {
-        log.push_str("Music files was not found\n");
-        bail!(log);
+        bail!("Music files was not found\n");
     }
-    Ok((all_files, log))
+    Ok(all_files)
 }
 pub fn parse_file(path: PathBuf) -> Result<TagData, Error> {
     let file = Tag::new().read_from_path(&path)?;
@@ -201,5 +191,26 @@ pub fn is_rtl(s: &str) -> bool {
     false
 }
 pub fn apply_selected(ui: &mut CoverUI, id: SongId) {
-    //
+    let song = &mut ui.state.songs[id];
+    let selected_img_hash = song.selected_img;
+    let mut selected_img = None;
+    for img in &mut song.imgs {
+        if img.hash == selected_img_hash {
+            selected_img = Some(img);
+            break;
+        }
+    }
+    if let Some(img) = selected_img {
+        let (fin, fin_type, fin_prev) = final_img(img, &ui.state.img_settings);
+        song.original_art = Some(fin_prev);
+
+        let pic = Picture {
+            data: &fin,
+            mime_type: fin_type.audiotags(),
+        };
+        let tags = &mut song.tag_data.file;
+        tags.set_album_cover(pic);
+        tags.write_to_path(song.tag_data.path.to_str().unwrap())
+            .unwrap();
+    }
 }

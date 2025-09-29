@@ -1,7 +1,6 @@
 use std::{
     path::PathBuf,
     sync::Arc,
-    thread,
     time::{Duration, Instant},
     vec,
 };
@@ -10,23 +9,24 @@ use bytes::Bytes;
 use iced::{
     Element, Event, Subscription, Task, Theme, event, exit,
     keyboard::{Event::KeyReleased, Key, key::Named},
-    widget::image::Handle,
+    stream,
     window::{self, change_icon, get_oldest, icon},
 };
 use rfd::{AsyncFileDialog, FileHandle};
-use tokio::{runtime::RuntimeMetrics, sync::Semaphore, time::sleep};
+use tokio::{sync::Semaphore, task::yield_now, time::sleep};
 
 use crate::{
+    ImgHandle,
     api::queue::{Queue, QueueMessage, ReturnSongImg, Source::Youtube, TagsInput},
     app::{
-        song::{Song, SongId, SongState},
-        song_img::{ImgFormat, ImgHash, SongImg},
+        song::{Song, SongHash, SongId, SongState},
+        song_img::{ImgFormat, ImgHash, ImgId, SongImg},
         styles::*,
         view::{REGEX_LIM, view},
     },
     parser::{
-        file_parser::{ImageSettings, ParseSettings, RegexType, apply_selected, get_tags_data},
-        image_parser::{self, decode},
+        file_parser::{ParseSettings, RegexType, TagData, apply_selected, get_tags_data},
+        image_parser::{self, ImageSettings, decode_and_sample},
     },
 };
 
@@ -36,6 +36,9 @@ pub enum Message {
     PathOpenEnd(Option<Vec<FileHandle>>),
     FolderOpenStart,
     GotPath(Vec<FileHandle>),
+    CreateSongs(Vec<TagData>),
+    PushSong(Song),
+    PathDropped(Vec<FileHandle>),
     DownscaleInput(String),
     AddRegex,
     RemoveRegex,
@@ -53,24 +56,27 @@ pub enum Message {
     GoBackDiscard(SongId),
     GoBack(SongId),
     Accept(SongId),
+    // INFO: potentially return imgs into mtx
     FromQueue(QueueMessage),
     ProcessedArt(ReturnSongImg),
     Offset(f32),
     ImgSelect(SongId, ImgHash),
-    ImgPreview(SongId, usize),
+    ImgPreview(SongId, ImgId),
+    ImgPreviewClose,
     ImgMenuToggle(bool, SongId, ImgHash),
     Start,
     AfterStart,
     Exit,
     Print(String),
-    None,
 }
 
 #[derive(Default)]
 pub struct State {
     pub list_offset: f32,
     pub songs: Vec<Song>,
+    pub preview_img: Option<ImgHandle>,
     pub ui_blocked: bool,
+    pub ui_loading: bool,
     pub parse_settings: ParseSettings,
     pub init_size: (f32, f32),
     pub img_settings: ImageSettings,
@@ -117,438 +123,96 @@ impl CoverUI {
             AfterStart => {
                 return Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 })))
-                // .chain(Task::future(async {
-                //     sleep(Duration::from_millis(300)).await;
-                //     None
-                // }))
+                .chain(Task::future(async {
+                    sleep(Duration::from_millis(3000)).await;
+                    Print("".to_string())
+                }))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))))
                 .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
                     img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        Bytes::from_static(include_bytes!("../../foo/6.jpg")),
                         ImgFormat::Jpg,
                         Youtube,
                     ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Handle::from_bytes(Bytes::from_static(include_bytes!("../../foo/6.jpg"))),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: self.state.songs[0].hash,
+                    hash: 0,
                     id: 0,
                 }))));
             }
@@ -558,16 +222,37 @@ impl CoverUI {
                 dbg!(s);
             }
             GotPath(vec) => {
-                for path in vec {
-                    let res = get_tags_data(path.into(), &self.state.parse_settings);
-                    if let Err(e) = res {
-                        println!("{e:?}");
-                        return Task::none();
+                self.state.ui_loading = false;
+                return Task::perform(
+                    get_tags_data(vec, self.state.parse_settings.clone()),
+                    |res| {
+                        if let Err(e) = res {
+                            return Print(e.to_string());
+                        }
+                        CreateSongs(res.unwrap())
+                    },
+                );
+            }
+            CreateSongs(tags) => {
+                return Task::stream(stream::channel(1, |mut tx| async move {
+                    for tag in tags {
+                        let mut tried = tx.try_send(PushSong(Song::new(tag)));
+                        loop {
+                            if let Err(e) = tried
+                                && e.is_full()
+                            {
+                                dbg!("full");
+                                tried = tx.try_send(e.into_inner())
+                            } else {
+                                break;
+                            }
+                        }
+                        yield_now().await;
                     }
-                    for i in res.unwrap() {
-                        self.state.songs.push(Song::new(i));
-                    }
-                }
+                }));
+            }
+            PushSong(song) => {
+                self.state.songs.push(song);
             }
             FileOpenStart => {
                 self.state.ui_blocked = true;
@@ -584,6 +269,18 @@ impl CoverUI {
                 let files = AsyncFileDialog::new().set_directory("/").pick_folders();
                 return Task::perform(files, PathOpenEnd);
             }
+            PathOpenEnd(data) => {
+                self.state.ui_blocked = false;
+                self.state.ui_loading = true;
+                if let Some(vec) = data {
+                    return Task::done(GotPath(vec));
+                }
+            }
+            PathDropped(vec) => {
+                self.state.ui_loading = true;
+                return Task::done(GotPath(vec));
+            }
+
             ImgSelect(song_id, img_hash) => {
                 self.state.songs[song_id].selected_img = img_hash;
                 return Task::done(ImgMenuToggle(false, song_id, img_hash));
@@ -593,12 +290,6 @@ impl CoverUI {
                     self.state.songs[song_id].menu_img = img_hash;
                 } else if self.state.songs[song_id].menu_img == img_hash {
                     self.state.songs[song_id].menu_close();
-                }
-            }
-            PathOpenEnd(data) => {
-                self.state.ui_blocked = false;
-                if let Some(vec) = data {
-                    return Task::done(GotPath(vec));
                 }
             }
             SquareToggle => {
@@ -613,11 +304,21 @@ impl CoverUI {
                     self.state.parse_settings.reg_separators[i] = sep;
                 }
             }
+            ImgPreview(song_i, img_id) => {
+                let img = self.state.songs[song_i].imgs[img_id]
+                    .get_final_preview(&self.state.img_settings);
 
+                self.state.preview_img = Some(img);
+            }
+            ImgPreviewClose => {
+                self.state.preview_img = None;
+            }
             DownscaleInput(num) => {
-                let res = str::parse::<i32>(&num);
+                let res = str::parse::<u32>(&num);
                 if let Ok(num) = res {
-                    self.state.img_settings.downscale = i32::max(100, i32::min(10000, num));
+                    self.state.img_settings.downscale = u32::min(10000, num);
+                } else {
+                    self.state.img_settings.downscale = 0;
                 }
             }
             AddRegex => {
@@ -664,6 +365,10 @@ impl CoverUI {
                 self.state.songs[id].state = SongState::Confirm;
 
                 self.state.songs[id].queue_handle.take().unwrap().abort();
+                self.state.songs[id].imgs.clear();
+                self.state.songs[id].img_groups.clear();
+                self.state.songs[id].menu_close();
+                self.state.songs[id].unselect();
             }
             DiscardSong(id) => {
                 self.state.songs[id].state = SongState::Hidden;
@@ -679,35 +384,44 @@ impl CoverUI {
             }
 
             FromQueue(mes) => {
-                // dbg!(self.time.elapsed().as_millis(), "FromQueue start");
                 use QueueMessage::*;
                 match mes {
                     GotArt(output) => {
-                        return Task::perform(decode(output, self.decode_sem.clone()), |res| {
-                            ProcessedArt(res.unwrap())
-                            // if let Ok(ok) = out {
-                            //     ProcessedArt(ok)
-                            // } else {
-                            //     Print(format!("img was not decoded: {}", out.unwrap_err()))
-                            // }
-                        });
+                        // song was deleted
+                        if output.id >= self.state.songs.len()
+                        // FIXME:
+                        // || self.state.songs[output.id].hash != output.hash
+                        {
+                            return Task::done(Print("skipped".to_string()));
+                        }
+                        return Task::perform(
+                            decode_and_sample(
+                                output,
+                                self.decode_sem.clone(),
+                                self.state.img_settings,
+                            ),
+                            |res| {
+                                if let Ok(ok) = res {
+                                    ProcessedArt(ok)
+                                } else {
+                                    Print(format!("img was not decoded: {}", res.unwrap_err()))
+                                }
+                            },
+                        );
                     }
                 }
             }
             ProcessedArt(output) => {
                 let song = &mut self.state.songs[output.id];
-                song.imgs.push(output.img);
-                // let res =
-                //     image_parser::push_and_group(&mut song.img_groups, &mut song.imgs, output.img);
-                // let _ = res.inspect_err(|e| println!("img was not added: {e}"));
+                // song.imgs.push(output.img);
+                let res =
+                    image_parser::push_and_group(&mut song.img_groups, &mut song.imgs, output.img);
 
-                dbg!(self.time.elapsed().as_millis());
-                self.time = Instant::now();
+                let _ = res.inspect_err(|e| println!("img was not added: {e}"));
             }
             Offset(offset) => {
                 self.state.list_offset = offset;
             }
-            None => {}
             _ => unimplemented!("unhandled message"),
         }
         Task::none()
@@ -715,7 +429,7 @@ impl CoverUI {
     pub fn subscription(&self) -> Subscription<Message> {
         event::listen_with(|event, _status, _windows| match event {
             Event::Window(window::Event::FileDropped(path)) => {
-                Some(Message::GotPath(vec![path.into()]))
+                Some(Message::PathDropped(vec![path.into()]))
             }
             Event::Keyboard(KeyReleased {
                 key: Key::Named(Named::Escape),
