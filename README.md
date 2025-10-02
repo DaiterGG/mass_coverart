@@ -32,7 +32,8 @@ If you have a suggestion open an issue or write me on discond: \_daiter\_
 * [AlbumArt](https://sourceforge.net/p/album-art)
 
 ## Implementation details
-* Written in Rust and using Iced gui
+* Written in Rust and using Iced GUI
+* Implements [Miasma](https://github.com/xero/miasma.nvim) theme
 * Refereses code from AlbumArt scripts collection
 * Use audiotags crate to read metadata
 * Use image-compare crate to sort images
