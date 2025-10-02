@@ -382,6 +382,12 @@ impl Song {
         let img = &this.imgs[img_iter];
         let border = this.selected_img == img.hash;
         let mut info_col = Column::new().spacing(INFO_ROW_GAP);
+
+        let stategy = if ui.state.img_settings.square {
+            iced::ContentFit::Cover
+        } else {
+            iced::ContentFit::Contain
+        };
         if let Some((w, h)) = img.orig_res {
             info_col = info_col.push(
                 text(format!("original resolution: {}x{}", w, h))
@@ -399,6 +405,7 @@ impl Song {
         info_col = info_col.push(
             text(img.feedback.to_string())
                 .size(INNER_TEXT_SIZE)
+                .wrapping(text::Wrapping::Word)
                 .center()
                 .width(Fill),
         );
@@ -441,7 +448,7 @@ impl Song {
         } else {
             center(
                 image(img.preview.as_ref().unwrap())
-                    .content_fit(iced::ContentFit::Contain)
+                    .content_fit(stategy)
                     .width(ART_WH)
                     .height(ART_WH),
             )

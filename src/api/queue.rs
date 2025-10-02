@@ -79,9 +79,9 @@ impl Queue {
     pub const TOTAL_SOURCES: i32 = 4;
     async fn queue(tags: TagsInput, tx: Sender<Message>) {
         let mut set = JoinSet::new();
-        set.spawn(youtube_music(tags.clone(), tx.clone()));
+        // set.spawn(youtube_music(tags.clone(), tx.clone()));
         set.spawn(youtube(tags.clone(), tx.clone()));
-        set.spawn(musicbrainz(tags.clone(), tx.clone()));
+        // set.spawn(musicbrainz(tags.clone(), tx.clone()));
         set.spawn(bandcamp(tags.clone(), tx.clone()));
         info!("queue is started for {}", tags.id);
         send_message(

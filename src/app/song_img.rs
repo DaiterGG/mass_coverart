@@ -150,9 +150,10 @@ impl SongImg {
 
         yield_now().await;
 
-        if set.square && w > h {
-            decoded = decoded.crop_imm(w / 2 - h / 2, 0, h, h);
-        }
+        // store full, crop at display
+        // if set.square && w > h {
+        //     decoded = decoded.crop_imm(w / 2 - h / 2, 0, h, h);
+        // }
 
         let dyn_img = decoded.thumbnail(PREVIEW_DIM, PREVIEW_DIM);
         yield_now().await;

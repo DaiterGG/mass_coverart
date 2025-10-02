@@ -1,6 +1,6 @@
 use anyhow::Error;
 use iced::futures::channel::mpsc::Sender;
-use log::{info, warn};
+use log::{debug, info, warn};
 use regex::Regex;
 use reqwest::Client;
 use tokio::time::Instant;
@@ -67,8 +67,10 @@ async fn with_query(
 
     let search_results_html = client.get(&search_url).send().await?.text().await?;
 
+    info!("Doc dump: {}", search_results_html);
     // https://sourceforge.net/p/album-art/src/ci/main/tree/Scripts/Scripts/bandcamp.boo
-    let re = Regex::new(r#"(?s)<li class="searchresult[^>]*>.*?<a class="artcont" href="([^"]+)".*?<img src="([^"]+)"[^>]*>.*?<div class="heading">\s*<a[^>]*>([^<]+)</a>"#)
+    //    let re = Regex::new(r#"(?s)<li class="searchresult[^>]*>.*?<a class="artcont" href="([^"]+)".*?<img src="([^"]+)"[^>]*>.*?<div class="heading">\s*<a[^>]*>([^<]+)</a>"#)
+    let re = Regex::new(r#"(?s)<li class="searchresult[^>]*>.*?<a class="artcont" href="([^"?]+)[^"]*".*?<img src="([^"]+)"[^>]*>.*?<div class="heading">\s*<a[^>]*>([^<]+)</a>"#)
         .map_err(|e| anyhow::anyhow!("Invalid regex: {}", e))?;
 
     let mut match_count = 0;
@@ -79,9 +81,9 @@ async fn with_query(
         {
             let url = url.as_str().to_string();
             let img_url = img_url.as_str().to_string();
-            let title = title.as_str().to_string();
+            let title = title.as_str().trim_start().trim_end();
 
-            info!("Found result: {} - {}", title, url);
+            info!("Found result: {} {}", title, url);
             info!("Image URL: {}", img_url);
 
             // Extract base image URL for higher quality versions
@@ -99,6 +101,7 @@ async fn with_query(
 
             let client_clone = client.clone();
             let tx_clone = tx.clone();
+            let feedback = format!("title: {}\nurl: {}", title, url);
 
             fetch_and_send_artwork(
                 client_clone,
@@ -106,7 +109,7 @@ async fn with_query(
                 tx_clone,
                 full_size_url,
                 thumb_url,
-                title,
+                feedback,
                 src,
             )
             .await?;
@@ -138,17 +141,20 @@ async fn fetch_and_send_artwork(
     tx: Sender<Message>,
     full_url: String,
     thumb_url: String,
-    title: String,
+    feedback: String,
     src: Source,
 ) -> Result<(), Error> {
     println!("Attempting to fetch artwork from: {}", full_url);
 
     let image_data =
-        shared::get_img(client.clone(), vec![full_url.clone(), thumb_url.clone()]).await?;
+        shared::get_img(client.clone(), vec![thumb_url.clone(), full_url.clone()]).await?;
 
-    let feedback = format!("Bandcamp: {}", title);
-
-    let song_img = SongImg::new(ImgFormat::Jpg, LazyImage::Raw(image_data), src, feedback);
+    let song_img = SongImg::new(
+        ImgFormat::Jpg,
+        LazyImage::RawPreview(vec![full_url], image_data),
+        src,
+        feedback,
+    );
 
     send_song(song_img, tx.clone(), tags).await;
 

@@ -45,7 +45,7 @@ pub async fn youtube(tags: TagsInput, tx: Sender<Message>) -> Result<(), Error> 
     }
 
     info!("finished in {}ms", now.elapsed().as_millis());
-    send_message(&tags, QueueMessage::SourceFinished, tx);
+    send_message(&tags, QueueMessage::SourceFinished, tx).await;
     Ok(())
 }
 

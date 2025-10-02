@@ -16,7 +16,9 @@ use musicbrainz_rs::{
         release::{self, Release, ReleaseSearchQuery, ReleaseSearchQueryLuceneQueryBuilder},
     },
 };
-
+// TODO:
+// yt music scrape title
+// bandcamp wrong title fetch
 pub type ImgHandle = iced::widget::image::Handle;
 pub type TaskHandle = iced::task::Handle;
 

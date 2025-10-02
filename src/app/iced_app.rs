@@ -2,15 +2,18 @@ use core::hash;
 use std::{
     path::PathBuf,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     vec,
 };
 
 use bytes::Bytes;
 use iced::{
-    Element, Event, Subscription, Task, Theme, event, exit,
+    Element, Event,
+    Length::Fill,
+    Subscription, Task, Theme, event, exit,
     keyboard::{Event::KeyReleased, Key, key::Named},
     stream,
+    widget::{Column, Space, button, column, container, image, scrollable, stack},
     window::{self, change_icon, get_oldest, icon},
 };
 use log::{error, warn};
@@ -166,7 +169,10 @@ impl CoverUI {
                     ConfirmSong(0)
                 }));
             }
-            Exit => return exit(),
+            Exit => {
+                self.view();
+            }
+            // Exit => return exit(),
             Nothing => {}
             GotPath(vec) => {
                 self.state.ui_loading = false;
@@ -453,12 +459,13 @@ impl CoverUI {
     pub fn subscription(&self) -> Subscription<Message> {
         event::listen_with(|event, _status, _windows| match event {
             Event::Window(window::Event::FileDropped(path)) => {
+
                 Some(Message::PathDropped(vec![path.into()]))
             }
             Event::Keyboard(KeyReleased {
-                key: Key::Named(Named::Escape),
+                // key: Key::Named(Named::Escape),
                 ..
-            }) => Some(Message::Exit),
+            }) =>{ Some(Message::Exit)},
             _ => None,
         })
     }
