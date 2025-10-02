@@ -10,12 +10,9 @@ use std::{
 use audiotags::{AudioTag, Picture, Tag};
 use thiserror::Error;
 
-use crate::{
-    app::{
-        iced_app::CoverUI,
-        song::{Song, SongId},
-    },
-    parser::image_parser::final_img,
+use crate::app::{
+    iced_app::CoverUI,
+    song::{Song, SongId},
 };
 
 #[derive(Clone, Debug)]
@@ -201,7 +198,7 @@ pub fn apply_selected(ui: &mut CoverUI, id: SongId) {
         }
     }
     if let Some(img) = selected_img {
-        let (fin, fin_type, fin_prev) = final_img(img, &ui.state.img_settings);
+        let (fin, fin_type, fin_prev) = img.final_img(&ui.state.img_settings);
         song.original_art = Some(fin_prev);
 
         let pic = Picture {

@@ -9,6 +9,7 @@ use iced::{
         row,
         scrollable::{Direction, Scrollbar},
         text, text_input,
+        tooltip::Position,
     },
 };
 use rand::RngCore;
@@ -18,19 +19,20 @@ use crate::{
     app::{
         iced_app::{CoverUI, Message},
         song_img::{ImgHash, ImgId, SongImg},
-        styles::{button_st, image_selected_st, img_scroll_st, input_st, item_cont_st},
+        styles::{
+            button_st, filler_st, image_selected_st, img_scroll_st, input_st, item_cont_st,
+            preview_box_st, select_menu_st,
+        },
         view::{BTN_SIZE, INNER_TEXT_SIZE, TEXT_SIZE},
     },
-    parser::{
-        file_parser::{TagData, is_rtl},
-        image_parser::original_image_preview,
-    },
+    parser::file_parser::{TagData, is_rtl},
 };
 use iced::widget::image;
 use iced::widget::scrollable;
+use iced::widget::tooltip;
 
 const CONFIRM_H: f32 = 140.0;
-const MAIN_H: f32 = 350.0;
+const MAIN_H: f32 = 320.0;
 const INFO_COLUMN_GAP: f32 = 6.0;
 const INFO_ROW_GAP: f32 = 6.0;
 const ART_ROW_H: f32 = 200.0;
@@ -42,6 +44,8 @@ const CENTER_OFFSET: f32 = 1500.0;
 pub enum SongState {
     Confirm,
     Main,
+    MainLoading,
+    MainDownloading,
     Hidden,
 }
 impl SongState {
@@ -49,6 +53,8 @@ impl SongState {
         match self {
             SongState::Confirm => CONFIRM_H,
             SongState::Main => MAIN_H,
+            SongState::MainLoading => MAIN_H,
+            SongState::MainDownloading => MAIN_H,
             _ => 0.0,
         }
     }
@@ -68,6 +74,8 @@ pub struct Song {
     pub hash: SongHash,
     pub menu_img: ImgHash,
     pub selected_img: ImgHash,
+    /// y out of x
+    pub sources_finished: (i32, i32),
     /// size of groups, used to sort imgs when new one is added
     /// ```text
     /// [ |----gr1 = 3 ---|,|gr2 = 2 -| ]
@@ -83,10 +91,11 @@ impl Song {
         Self {
             state: SongState::Confirm,
             queue_handle: None,
-            original_art: original_image_preview(&tag_data),
+            original_art: SongImg::original_image_preview(&tag_data),
             tag_data,
             hash: rand::rng().next_u64(),
             menu_img: 0,
+            sources_finished: (0, 0),
             selected_img: 0,
             img_groups: Vec::new(),
             imgs: Vec::new(),
@@ -111,8 +120,6 @@ impl Song {
         let start = f32::max(center - CENTER_OFFSET, 0.0);
         let end = f32::min(center + CENTER_OFFSET, real_h);
 
-        // println!("{} {}", start, end);
-
         // Draw empty boxes when item is not on screen
         let mut real_h = 0.0;
         for i in 0..ui.state.songs.len() {
@@ -124,6 +131,7 @@ impl Song {
             }
             real_h += h;
         }
+
         list
     }
     pub fn generate_list_item<'a>(
@@ -197,10 +205,24 @@ impl Song {
             )
         };
 
+        let sources_label = text("finished:")
+            .size(TEXT_SIZE)
+            .height(BTN_SIZE)
+            .color(ui.theme().extended_palette().background.strong.text)
+            .line_height(INFO_LINE_H);
+
+        let sources = text(format!(
+            "[{}/{}]",
+            this.sources_finished.0, this.sources_finished.1
+        ))
+        .height(BTN_SIZE)
+        .width(Fill)
+        .line_height(INFO_LINE_H)
+        .size(TEXT_SIZE);
         let path_label = text("path:")
             .size(TEXT_SIZE)
             .height(BTN_SIZE)
-            .color(ui.theme().extended_palette().background.weak.text)
+            .color(ui.theme().extended_palette().background.strong.text)
             .line_height(INFO_LINE_H);
         let path = text(path_str)
             .height(BTN_SIZE)
@@ -216,16 +238,16 @@ impl Song {
                         text("title:")
                             .size(TEXT_SIZE)
                             .height(BTN_SIZE)
-                            .color(ui.theme().extended_palette().background.weak.text)
+                            .color(ui.theme().extended_palette().background.strong.text)
                             .line_height(INFO_LINE_H),
                         text("album:")
                             .size(TEXT_SIZE)
                             .height(BTN_SIZE)
-                            .color(ui.theme().extended_palette().background.weak.text)
+                            .color(ui.theme().extended_palette().background.strong.text)
                             .line_height(INFO_LINE_H),
                         text("artist:")
                             .size(TEXT_SIZE)
-                            .color(ui.theme().extended_palette().background.weak.text)
+                            .color(ui.theme().extended_palette().background.strong.text)
                             .height(BTN_SIZE)
                             .line_height(INFO_LINE_H),
                     ]
@@ -269,10 +291,11 @@ impl Song {
                 row![
                     Column::new()
                         .push(Self::image_row(ui, id))
+                        .push(row![sources_label, sources].spacing(INFO_ROW_GAP))
                         .push(
-                            text("Update tags")
+                            text("Update tags (TODO)")
                                 .size(TEXT_SIZE)
-                                .color(ui.theme().extended_palette().background.weak.text)
+                                .color(ui.theme().extended_palette().background.strong.text)
                                 .height(BTN_SIZE)
                                 .line_height(INFO_LINE_H)
                         )
@@ -284,7 +307,7 @@ impl Song {
                         btn("accept selected")
                             .width(Fill)
                             .style(button_st)
-                            .on_press(Accept(id)),
+                            .on_press(ApplySelectedPressed(id)),
                         btn("back to tags")
                             .width(Fill)
                             .clip(true)
@@ -298,8 +321,27 @@ impl Song {
                     .spacing(INFO_COLUMN_GAP)
                     .width(120),
                 ]
-                .spacing(INFO_COLUMN_GAP)
+                .spacing(INFO_COLUMN_GAP),
             ])
+            .height(MAIN_H),
+            SongState::MainDownloading => container(
+                text("Downloading...")
+                    .center()
+                    .size(50)
+                    .height(Fill)
+                    .color(ui.theme().extended_palette().background.weak.text)
+                    .width(400),
+            )
+            .height(MAIN_H),
+
+            SongState::MainLoading => container(
+                text("Loading...")
+                    .center()
+                    .size(50)
+                    .color(ui.theme().extended_palette().background.weak.text)
+                    .height(Fill)
+                    .width(400),
+            )
             .height(MAIN_H),
             SongState::Hidden => panic!("Cannot draw hidden song"),
         };
@@ -312,6 +354,19 @@ impl Song {
 
         for i in 0..this.imgs.len() {
             row = row.push(Self::image_box(ui, id, i));
+        }
+
+        if this.imgs.is_empty() {
+            row = row.push(
+                container(
+                    text("Searching...")
+                        .center()
+                        .size(50)
+                        .height(Fill)
+                        .width(400),
+                )
+                .style(filler_st),
+            );
         }
         scrollable(row)
             .direction(Direction::Horizontal(
@@ -326,8 +381,27 @@ impl Song {
         let this = &ui.state.songs[id];
         let img = &this.imgs[img_iter];
         let border = this.selected_img == img.hash;
-        let (w, h) = img.orig_res;
-        // dbg!(img.bytes());
+        let mut info_col = Column::new().spacing(INFO_ROW_GAP);
+        if let Some((w, h)) = img.orig_res {
+            info_col = info_col.push(
+                text(format!("original resolution: {}x{}", w, h))
+                    .size(INNER_TEXT_SIZE)
+                    .center()
+                    .width(Fill),
+            )
+        }
+        info_col = info_col.push(
+            text(format!("source: {}", img.src))
+                .size(INNER_TEXT_SIZE)
+                .center()
+                .width(Fill),
+        );
+        info_col = info_col.push(
+            text(img.feedback.to_string())
+                .size(INNER_TEXT_SIZE)
+                .center()
+                .width(Fill),
+        );
         let mut cont = if this.menu_img == img.hash {
             center(
                 column![
@@ -339,7 +413,7 @@ impl Song {
                                 .width(70)
                                 .style(button_st),
                             button(text("preview").size(INNER_TEXT_SIZE).center())
-                                .on_press(Message::ImgPreview(id, img_iter))
+                                .on_press(Message::ImgPreviewOpen(id, img_iter))
                                 .height(BTN_SIZE)
                                 .width(70)
                                 .style(button_st),
@@ -347,21 +421,23 @@ impl Song {
                         .spacing(INFO_ROW_GAP)
                     )
                     .width(Fill),
-                    column![
-                        text(format!("{}x{}", w, h))
-                            .size(INNER_TEXT_SIZE)
-                            .center()
-                            .width(Fill),
-                        text(format!("{}", img.src))
-                            .size(INNER_TEXT_SIZE)
-                            .center()
-                            .width(Fill),
-                    ]
-                    .spacing(INFO_ROW_GAP)
+                    container(tooltip(
+                        text("about...").center().size(INNER_TEXT_SIZE),
+                        container(info_col)
+                            .max_width(500)
+                            .padding(4)
+                            .style(select_menu_st),
+                        Position::FollowCursor
+                    ))
+                    .center_x(Fill)
                 ]
+                .width(ART_WH)
+                .height(ART_WH)
                 .padding(20)
                 .spacing(20),
             )
+            .padding(10)
+            .style(select_menu_st)
         } else {
             center(
                 image(img.preview.as_ref().unwrap())

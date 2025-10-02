@@ -13,16 +13,14 @@ use iced::{
     },
 };
 
-use crate::app::iced_app::CoverUI;
-
 pub fn miasma_theme() -> Theme {
     let primary = Color::from_rgb8(120, 130, 74);
     let secondary = Color::from_rgb8(187, 119, 68);
     let bg = Color::from_rgb8(34, 34, 34);
     let bg_strong = Color::from_rgb8(28, 28, 28);
-    let bg_stronger = Color::from_rgb8(24, 24, 24);
+    let bg_strong_text = Color::from_rgb8(90, 90, 90);
     let bg_weak = Color::from_rgb8(46, 46, 46);
-    let bg_text = Color::from_rgb8(90, 90, 90);
+    let bg_weak_text = Color::from_rgb8(60, 60, 60);
     let text = Color::from_rgb8(215, 196, 131);
     let success = Color::from_rgb8(95, 135, 95);
     let danger = Color::from_rgb8(104, 87, 66);
@@ -40,12 +38,12 @@ pub fn miasma_theme() -> Theme {
             background: palette::Background {
                 weak: Pair {
                     color: bg_weak,
-                    text: bg_text,
+                    text: bg_weak_text,
                 },
                 base: Pair::new(bg, text),
                 strong: Pair {
                     color: bg_strong,
-                    text: bg_stronger,
+                    text: bg_strong_text,
                 },
             },
             secondary: Secondary::generate(secondary, secondary),
@@ -57,8 +55,6 @@ pub fn miasma_theme() -> Theme {
 }
 
 pub fn preview_close_st(theme: &Theme, status: button::Status) -> button::Style {
-    let palette = theme.extended_palette();
-
     button::Style {
         background: Some(Color::from_rgba8(0, 0, 0, 0.7).into()),
         ..button::Style::default()
@@ -122,7 +118,7 @@ pub fn input_st(theme: &Theme, status: text_input::Status) -> text_input::Style 
         selection: palette.primary.base.color,
         icon: palette.secondary.base.color,
         value: palette.background.base.text,
-        placeholder: palette.background.weak.color,
+        placeholder: palette.background.strong.text,
     }
 }
 
@@ -131,7 +127,7 @@ pub fn filler_st(theme: &Theme) -> container::Style {
 
     container::Style {
         background: Some(p.background.base.color.into()),
-        text_color: Some(p.background.weak.color),
+        text_color: Some(p.background.weak.text),
         ..container::Style::default()
     }
 }
@@ -156,6 +152,20 @@ pub fn add_remove(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+pub fn select_menu_st(theme: &Theme) -> container::Style {
+    let p = theme.extended_palette();
+
+    container::Style {
+        background: Some(p.background.strong.color.into()),
+        border: Border {
+            width: 1.0,
+            radius: 10.0.into(),
+            color: p.danger.base.color,
+        },
+        text_color: Some(p.background.base.text),
+        ..container::Style::default()
+    }
+}
 pub fn preview_box_st(theme: &Theme) -> container::Style {
     let p = theme.extended_palette();
 
@@ -166,7 +176,7 @@ pub fn preview_box_st(theme: &Theme) -> container::Style {
             radius: 10.0.into(),
             color: p.danger.base.color,
         },
-        text_color: Some(p.background.base.color),
+        text_color: Some(p.background.weak.text),
         ..container::Style::default()
     }
 }
@@ -180,7 +190,7 @@ pub fn list_bg_st(theme: &Theme) -> container::Style {
             radius: 10.0.into(),
             color: p.danger.base.color,
         },
-        text_color: Some(p.background.weak.color),
+        text_color: Some(p.background.weak.text),
         ..container::Style::default()
     }
 }
@@ -308,12 +318,13 @@ pub fn image_selected_st(theme: &Theme) -> container::Style {
     let p = theme.extended_palette();
 
     container::Style {
-        background: None,
+        background: Some(p.background.strong.color.into()),
         border: Border {
             width: 3.0,
             radius: 10.0.into(),
             color: p.primary.base.color,
         },
+        text_color: Some(p.background.base.text),
         ..container::Style::default()
     }
 }

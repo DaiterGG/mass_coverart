@@ -1,22 +1,19 @@
 use iced::{
-    Alignment::{self, Center},
+    Alignment::{self},
     Element,
     Length::{Fill, FillPortion},
-    Theme,
-    alignment::Horizontal::{self, Right},
+    alignment::Horizontal::{self},
     widget::{
-        MouseArea, Space,
-        checkbox::Icon,
-        column, container,
+        Space, column, container,
         image::Viewer,
         row,
         scrollable::{Direction, Scrollbar},
     },
 };
 
-use iced::widget::scrollable;
-
 use crate::app::{iced_app::CoverUI, song::Song, styles::*};
+use crate::{ImgHandle, app::iced_app::Message};
+use iced::widget::scrollable;
 use iced::widget::{button, checkbox, stack, text, text_input};
 
 pub const REGEX_LIM: usize = 7;
@@ -26,15 +23,21 @@ pub const H1_SIZE: f32 = 17.0;
 pub const INNER_TEXT_SIZE: f32 = 14.0;
 pub const BTN_SIZE: f32 = 25.0;
 pub const HEADER_H: f32 = 200.0;
-pub const FILE_COL_W: f32 = 380.0;
 
-use crate::app::iced_app::Message;
+#[derive(Clone, Debug, Default)]
+pub enum PreviewState {
+    #[default]
+    Closed,
+    Loading,
+    Error,
+    Display(ImgHandle),
+    Downloading,
+}
 
 pub fn view(ui: &CoverUI) -> Element<'_, Message> {
     use Message::*;
 
     let theme = ui.theme();
-    println!("draw");
 
     let h2 = |s| {
         text(s)
@@ -136,7 +139,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             regex = regex.push(add);
         }
     }
-    let header_color = ui.theme().extended_palette().background.weak.text;
+    let header_color = ui.theme().extended_palette().background.strong.text;
     let files_panel = column![
         text("Open")
             .size(H1_SIZE)
@@ -249,22 +252,50 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
     .height(Fill)
     .width(Fill)
     .padding(15);
-    let preview = if let Some(prev) = &ui.state.preview_img {
+
+    let preview = if let PreviewState::Closed = &ui.state.preview_img {
+        container("")
+    } else {
         container(stack![
             button("")
                 .style(preview_close_st)
-                .on_press(ImgPreviewClose)
+                .on_press(ImgPreviewSet(PreviewState::Closed))
                 .height(Fill)
                 .width(Fill),
             column![
                 Space::new(0, FillPortion(1)),
                 row![
                     Space::new(FillPortion(1), 0),
-                    container(Viewer::new(prev).height(Fill).width(Fill))
-                        .style(preview_box_st)
-                        .padding(6)
-                        .width(FillPortion(6))
-                        .height(FillPortion(6)),
+                    container(match &ui.state.preview_img {
+                        PreviewState::Display(h) =>
+                            container(Viewer::new(h).height(Fill).width(Fill)),
+                        PreviewState::Error => container(
+                            text("Error ocured")
+                                .center()
+                                .size(50)
+                                .height(Fill)
+                                .width(Fill),
+                        ),
+                        PreviewState::Downloading => container(
+                            text("Downloading...")
+                                .center()
+                                .size(50)
+                                .height(Fill)
+                                .width(Fill),
+                        ),
+                        PreviewState::Loading => container(
+                            text("Loading...")
+                                .center()
+                                .size(50)
+                                .height(Fill)
+                                .width(Fill),
+                        ),
+                        _ => container(""),
+                    })
+                    .style(preview_box_st)
+                    .padding(6)
+                    .width(FillPortion(6))
+                    .height(FillPortion(6)),
                     Space::new(FillPortion(1), 0),
                 ],
                 Space::new(0, FillPortion(1)),
@@ -272,9 +303,8 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             .height(Fill)
             .width(Fill),
         ])
-    } else {
-        container("")
     };
+
     let mian_stack = stack![main_col, preview];
 
     if ui.state.ui_blocked {

@@ -1,3 +1,4 @@
+use core::hash;
 use std::{
     path::PathBuf,
     sync::Arc,
@@ -12,22 +13,23 @@ use iced::{
     stream,
     window::{self, change_icon, get_oldest, icon},
 };
+use log::{error, warn};
+use reqwest::Client;
 use rfd::{AsyncFileDialog, FileHandle};
 use tokio::{sync::Semaphore, task::yield_now, time::sleep};
 
 use crate::{
-    ImgHandle,
-    api::queue::{Queue, QueueMessage, ReturnSongImg, Source::Youtube, TagsInput},
+    api::{
+        queue::{Queue, QueueMessage, Source::YoutubeAlbum, TagsInput},
+        shared,
+    },
     app::{
         song::{Song, SongHash, SongId, SongState},
-        song_img::{ImgFormat, ImgHash, ImgId, SongImg},
+        song_img::{ImageSettings, ImgFormat, ImgHash, ImgId, LazyImage, SongImg},
         styles::*,
-        view::{REGEX_LIM, view},
+        view::{PreviewState, REGEX_LIM, view},
     },
-    parser::{
-        file_parser::{ParseSettings, RegexType, TagData, apply_selected, get_tags_data},
-        image_parser::{self, ImageSettings, decode_and_sample},
-    },
+    parser::file_parser::{ParseSettings, RegexType, TagData, apply_selected, get_tags_data},
 };
 
 #[derive(Debug, Clone)]
@@ -55,31 +57,47 @@ pub enum Message {
     DiscardSong(SongId),
     GoBackDiscard(SongId),
     GoBack(SongId),
-    Accept(SongId),
+    ApplySelectedPressed(SongId),
+    ApplySelected(SongId),
+    DecodeAccept(Bytes, ImgFormat, SongId, ImgId),
+
     // INFO: potentially return imgs into mtx
-    FromQueue(QueueMessage),
-    ProcessedArt(ReturnSongImg),
+    FromQueue(SongId, SongHash, QueueMessage),
+    ProcessedArt(SongId, SongHash, SongImg),
     Offset(f32),
     ImgSelect(SongId, ImgHash),
+    ImgPreviewOpen(SongId, ImgId),
     ImgPreview(SongId, ImgId),
-    ImgPreviewClose,
+    ImgPreviewSet(PreviewState),
+    DecodePreview(Bytes, ImgFormat, SongId, ImgId),
     ImgMenuToggle(bool, SongId, ImgHash),
     Start,
     AfterStart,
     Exit,
-    Print(String),
+    Nothing,
 }
 
 #[derive(Default)]
 pub struct State {
     pub list_offset: f32,
     pub songs: Vec<Song>,
-    pub preview_img: Option<ImgHandle>,
+    pub preview_img: PreviewState,
     pub ui_blocked: bool,
     pub ui_loading: bool,
     pub parse_settings: ParseSettings,
     pub init_size: (f32, f32),
     pub img_settings: ImageSettings,
+}
+pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
+    if id >= st.songs.len()
+    // FIXME:
+    // || self.state.songs[output.id].hash != output.hash
+    {
+        error!("attempt to access invalid song {}", id);
+        true
+    } else {
+        false
+    }
 }
 pub struct CoverUI {
     pub time: Instant,
@@ -108,8 +126,6 @@ impl CoverUI {
         )
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        // println!("{:?}", message);
-
         use Message::*;
 
         match message {
@@ -121,113 +137,45 @@ impl CoverUI {
                 .chain(Task::done(AfterStart));
             }
             AfterStart => {
-                return Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                })))
+                #[cfg(debug_assertions)]
+                return Task::done(FromQueue(
+                         0,
+                         0,
+                        QueueMessage::GotArt(SongImg::new(
+                         ImgFormat::Jpg,
+                         LazyImage::Raw(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        YoutubeAlbum,
+                        "AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA ".to_string()
+                        ))))
                 .chain(Task::future(async {
                     sleep(Duration::from_millis(3000)).await;
-                    Print("".to_string())
+                    Nothing
                 }))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/2.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))))
-                .chain(Task::done(FromQueue(QueueMessage::GotArt(ReturnSongImg {
-                    img: SongImg::new(
-                        Bytes::from_static(include_bytes!("../../foo/6.jpg")),
-                        ImgFormat::Jpg,
-                        Youtube,
-                    ),
-                    hash: 0,
-                    id: 0,
-                }))));
+                .chain(Task::done(FromQueue(
+                            0,
+                            0,
+
+                        QueueMessage::GotArt(SongImg::new(
+                         ImgFormat::Jpg,
+                         LazyImage::Raw(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                        YoutubeAlbum,
+                        "AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA ".to_string()
+                        ))))
+                )
+                .chain(Task::future(async {
+                    ConfirmSong(0)
+                }));
             }
             Exit => return exit(),
-
-            Print(s) => {
-                dbg!(s);
-            }
+            Nothing => {}
             GotPath(vec) => {
                 self.state.ui_loading = false;
                 return Task::perform(
                     get_tags_data(vec, self.state.parse_settings.clone()),
                     |res| {
                         if let Err(e) = res {
-                            return Print(e.to_string());
+                            warn!("{e}");
+                            return Nothing;
                         }
                         CreateSongs(res.unwrap())
                     },
@@ -237,15 +185,10 @@ impl CoverUI {
                 return Task::stream(stream::channel(1, |mut tx| async move {
                     for tag in tags {
                         let mut tried = tx.try_send(PushSong(Song::new(tag)));
-                        loop {
-                            if let Err(e) = tried
-                                && e.is_full()
-                            {
-                                dbg!("full");
-                                tried = tx.try_send(e.into_inner())
-                            } else {
-                                break;
-                            }
+                        while let Err(e) = tried
+                            && !e.is_full()
+                        {
+                            tried = tx.try_send(e.into_inner());
                         }
                         yield_now().await;
                     }
@@ -271,8 +214,8 @@ impl CoverUI {
             }
             PathOpenEnd(data) => {
                 self.state.ui_blocked = false;
-                self.state.ui_loading = true;
                 if let Some(vec) = data {
+                    self.state.ui_loading = true;
                     return Task::done(GotPath(vec));
                 }
             }
@@ -304,15 +247,117 @@ impl CoverUI {
                     self.state.parse_settings.reg_separators[i] = sep;
                 }
             }
-            ImgPreview(song_i, img_id) => {
-                let img = self.state.songs[song_i].imgs[img_id]
-                    .get_final_preview(&self.state.img_settings);
+            ImgPreviewOpen(song_i, img_id) => {
+                if let LazyImage::Preview(urls) = &self.state.songs[song_i].imgs[img_id].image {
+                    self.state.preview_img = PreviewState::Downloading;
+                    let format = ImgFormat::from_url(&urls.first().unwrap());
+                    return Task::perform(
+                        shared::get_img(Client::new(), urls.to_vec()),
+                        move |res| {
+                            if let Ok(bytes) = res {
+                                DecodePreview(bytes, format, song_i, img_id)
+                            } else {
+                                ImgPreviewSet(PreviewState::Error)
+                            }
+                        },
+                    );
+                } else {
+                    self.state.preview_img = PreviewState::Loading;
+                    return Task::done(ImgPreview(song_i, img_id));
+                }
+            }
 
-                self.state.preview_img = Some(img);
+            DecodePreview(bytes, format, song_i, img_id) => {
+                self.state.preview_img = PreviewState::Loading;
+                let res = self.state.songs[song_i].imgs[img_id].preview_to_decoded(bytes, format);
+
+                let _ = res.inspect_err(|e| warn!("img was not decoded: {e}"));
+                return Task::done(ImgPreview(song_i, img_id));
             }
-            ImgPreviewClose => {
-                self.state.preview_img = None;
+            ImgPreview(song_i, img_id) => {
+                let state = self.state.songs[song_i].imgs[img_id]
+                    .final_img_preview(self.state.img_settings);
+                self.state.preview_img = PreviewState::Display(state);
             }
+            ImgPreviewSet(state) => {
+                self.state.preview_img = state;
+            }
+            ApplySelectedPressed(song_id) => {
+                let song = &mut self.state.songs[song_id];
+                let selected_img_hash = song.selected_img;
+                let mut selected_img_id = None;
+                for i in 0..song.imgs.len() {
+                    if song.imgs[i].hash == selected_img_hash {
+                        selected_img_id = Some(i);
+                        break;
+                    }
+                }
+                if let Some(img_id) = selected_img_id {
+                    let img = &mut song.imgs[img_id];
+                    if let LazyImage::Preview(urls) = &img.image {
+                        song.state = SongState::MainDownloading;
+                        let format = ImgFormat::from_url(urls.first().unwrap());
+                        return Task::perform(
+                            shared::get_img(Client::new(), urls.to_vec()),
+                            move |res| {
+                                if let Ok(bytes) = res {
+                                    DecodeAccept(bytes, format, song_id, img_id)
+                                } else {
+                                    GoBack(song_id)
+                                }
+                            },
+                        );
+                    } else {
+                        song.state = SongState::MainLoading;
+                        return Task::done(ApplySelected(song_id));
+                    }
+                }
+            }
+
+            DecodeAccept(bytes, format, song_id, img_id) => {
+                self.state.songs[song_id].state = SongState::MainLoading;
+                let res = self.state.songs[song_id].imgs[img_id].preview_to_decoded(bytes, format);
+
+                let _ = res.inspect_err(|e| warn!("img was not promoted to decoded: {e}"));
+
+                return Task::done(ApplySelected(song_id));
+            }
+            ApplySelected(song_id) => {
+                apply_selected(self, song_id);
+                return Task::done(GoBack(song_id));
+            }
+            ConfirmSong(id) => {
+                let info = TagsInput::from_data(
+                    id,
+                    self.state.songs[id].hash,
+                    &self.state.songs[id].tag_data,
+                );
+                self.state.songs[id].state = SongState::Main;
+                let (q, handle) = Queue::init(info);
+                self.state.songs[id].queue_handle = Some(handle);
+                return q;
+            }
+            GoBackDiscard(id) => return Task::done(GoBack(id)).chain(Task::done(DiscardSong(id))),
+
+            GoBack(id) => {
+                self.state.songs[id].state = SongState::Confirm;
+
+                self.state.songs[id].queue_handle.take().unwrap().abort();
+                self.state.songs[id].imgs.clear();
+                self.state.songs[id].img_groups.clear();
+                self.state.songs[id].menu_close();
+                self.state.songs[id].unselect();
+            }
+            DiscardSong(id) => {
+                self.state.songs[id].state = SongState::Hidden;
+                //Lazy GC
+                while !self.state.songs.is_empty()
+                    && self.state.songs.last().unwrap().state == SongState::Hidden
+                {
+                    self.state.songs.pop();
+                }
+            }
+
             DownscaleInput(num) => {
                 let res = str::parse::<u32>(&num);
                 if let Ok(num) = res {
@@ -342,82 +387,61 @@ impl CoverUI {
                 self.state.parse_settings.parse_file_name =
                     !self.state.parse_settings.parse_file_name;
             }
-            TitleInput(id, s) => self.state.songs[id].tag_data.title = Some(s),
-            AlbumInput(id, s) => self.state.songs[id].tag_data.album = Some(s),
-            ArtistInput(id, s) => self.state.songs[id].tag_data.artist = Some(s),
-            ConfirmSong(id) => {
-                let info = TagsInput::from_data(
-                    id,
-                    self.state.songs[id].hash,
-                    &self.state.songs[id].tag_data,
-                );
-                self.state.songs[id].state = SongState::Main;
-                let (q, handle) = Queue::init(info);
-                self.state.songs[id].queue_handle = Some(handle);
-                return q;
+            TitleInput(id, s) => {
+                self.state.songs[id].tag_data.title = if s.is_empty() { None } else { Some(s) }
             }
-            GoBackDiscard(id) => return Task::done(GoBack(id)).chain(Task::done(DiscardSong(id))),
-            Accept(id) => {
-                apply_selected(self, id);
-                return Task::done(GoBack(id));
+            AlbumInput(id, s) => {
+                self.state.songs[id].tag_data.album = if s.is_empty() { None } else { Some(s) }
             }
-            GoBack(id) => {
-                self.state.songs[id].state = SongState::Confirm;
+            ArtistInput(id, s) => {
+                self.state.songs[id].tag_data.artist = if s.is_empty() { None } else { Some(s) }
+            }
 
-                self.state.songs[id].queue_handle.take().unwrap().abort();
-                self.state.songs[id].imgs.clear();
-                self.state.songs[id].img_groups.clear();
-                self.state.songs[id].menu_close();
-                self.state.songs[id].unselect();
-            }
-            DiscardSong(id) => {
-                self.state.songs[id].state = SongState::Hidden;
-                //Lazy GC
-                while !self.state.songs.is_empty()
-                    && self.state.songs.last().unwrap().state == SongState::Hidden
-                {
-                    self.state.songs.pop();
-                }
-            }
             JpgToggle => {
                 self.state.img_settings.jpg = !self.state.img_settings.jpg;
             }
 
-            FromQueue(mes) => {
+            FromQueue(id, hash, mes) => {
+                if song_is_invalid(&self.state, id, hash) {
+                    return Task::none();
+                }
                 use QueueMessage::*;
                 match mes {
                     GotArt(output) => {
                         // song was deleted
-                        if output.id >= self.state.songs.len()
-                        // FIXME:
-                        // || self.state.songs[output.id].hash != output.hash
-                        {
-                            return Task::done(Print("skipped".to_string()));
-                        }
                         return Task::perform(
-                            decode_and_sample(
+                            SongImg::decode_and_sample(
                                 output,
                                 self.decode_sem.clone(),
                                 self.state.img_settings,
                             ),
-                            |res| {
+                            move |res| {
                                 if let Ok(ok) = res {
-                                    ProcessedArt(ok)
+                                    ProcessedArt(id, hash, ok)
                                 } else {
-                                    Print(format!("img was not decoded: {}", res.unwrap_err()))
+                                    error!("img was not decoded: {}", res.unwrap_err());
+                                    Nothing
                                 }
                             },
                         );
                     }
+                    SetSources(num, out_of) => {
+                        self.state.songs[id].sources_finished = (num, out_of)
+                    }
+                    SourceFinished => {
+                        let now = self.state.songs[id].sources_finished.0;
+                        self.state.songs[id].sources_finished = (now - 1, Queue::TOTAL_SOURCES)
+                    }
                 }
             }
-            ProcessedArt(output) => {
-                let song = &mut self.state.songs[output.id];
-                // song.imgs.push(output.img);
-                let res =
-                    image_parser::push_and_group(&mut song.img_groups, &mut song.imgs, output.img);
+            ProcessedArt(id, hash, output) => {
+                if song_is_invalid(&self.state, id, hash) {
+                    return Task::none();
+                }
+                let song = &mut self.state.songs[id];
+                let res = output.push_and_group(&mut song.img_groups, &mut song.imgs);
 
-                let _ = res.inspect_err(|e| println!("img was not added: {e}"));
+                let _ = res.inspect_err(|e| warn!("img was not added: {e}"));
             }
             Offset(offset) => {
                 self.state.list_offset = offset;

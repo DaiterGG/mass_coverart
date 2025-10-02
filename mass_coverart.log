@@ -1,0 +1,207 @@
+WARN [wgpu_hal::vulkan::instance] InstanceFlags::VALIDATION requested, but unable to find layer: VK_LAYER_KHRONOS_validation
+INFO [wgpu_hal::vulkan::instance] Debug utils not enabled: debug_utils_user_data not passed to Instance::from_raw
+WARN [wgpu_hal::dx12::instance] Unable to enable D3D12 debug interface: 0x887A002D
+WARN [wgpu_hal::auxil::dxgi::factory] Unable to enable DXGI debug interface: 0x887A002D
+INFO [iced_wgpu::window::compositor] Settings {
+    present_mode: AutoVsync,
+    backends: Backends(
+        VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU,
+    ),
+    default_font: Font {
+        family: SansSerif,
+        weight: Normal,
+        stretch: Normal,
+        style: Normal,
+    },
+    default_text_size: Pixels(
+        16.0,
+    ),
+    antialiasing: None,
+}
+WARN [wgpu_hal::vulkan::adapter] Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x19453A, less than the known good version 0x194843 (31.0.101.2115)
+INFO [wgpu_core::instance] Adapter Vulkan AdapterInfo { name: "Intel(R) HD Graphics 530", vendor: 32902, device: 6427, device_type: IntegratedGpu, driver: "Intel Corporation", driver_info: "Intel driver", backend: Vulkan }
+INFO [wgpu_core::instance] Adapter Vulkan AdapterInfo { name: "AMD Radeon (TM) R7 M370", vendor: 4098, device: 26112, device_type: DiscreteGpu, driver: "AMD proprietary driver", driver_info: "20.10.35.02", backend: Vulkan }
+INFO [wgpu_core::instance] Adapter Dx12 AdapterInfo { name: "AMD Radeon (TM) R7 M370", vendor: 4098, device: 26112, device_type: DiscreteGpu, driver: "", driver_info: "", backend: Dx12 }
+INFO [wgpu_core::instance] Adapter Dx12 AdapterInfo { name: "Intel(R) HD Graphics 530", vendor: 32902, device: 6427, device_type: IntegratedGpu, driver: "", driver_info: "", backend: Dx12 }
+INFO [wgpu_core::instance] Adapter Dx12 AdapterInfo { name: "Microsoft Basic Render Driver", vendor: 5140, device: 140, device_type: Cpu, driver: "", driver_info: "", backend: Dx12 }
+INFO [wgpu_core::instance] Adapter Gl AdapterInfo { name: "Intel(R) HD Graphics 530", vendor: 32902, device: 0, device_type: IntegratedGpu, driver: "", driver_info: "", backend: Gl }
+INFO [iced_wgpu::window::compositor] Available adapters: [
+    AdapterInfo {
+        name: "Intel(R) HD Graphics 530",
+        vendor: 32902,
+        device: 6427,
+        device_type: IntegratedGpu,
+        driver: "Intel Corporation",
+        driver_info: "Intel driver",
+        backend: Vulkan,
+    },
+    AdapterInfo {
+        name: "AMD Radeon (TM) R7 M370",
+        vendor: 4098,
+        device: 26112,
+        device_type: DiscreteGpu,
+        driver: "AMD proprietary driver",
+        driver_info: "20.10.35.02",
+        backend: Vulkan,
+    },
+    AdapterInfo {
+        name: "AMD Radeon (TM) R7 M370",
+        vendor: 4098,
+        device: 26112,
+        device_type: DiscreteGpu,
+        driver: "",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "Intel(R) HD Graphics 530",
+        vendor: 32902,
+        device: 6427,
+        device_type: IntegratedGpu,
+        driver: "",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "Microsoft Basic Render Driver",
+        vendor: 5140,
+        device: 140,
+        device_type: Cpu,
+        driver: "",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "Intel(R) HD Graphics 530",
+        vendor: 32902,
+        device: 0,
+        device_type: IntegratedGpu,
+        driver: "",
+        driver_info: "",
+        backend: Gl,
+    },
+]
+WARN [wgpu_hal::vulkan::adapter] Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x19453A, less than the known good version 0x194843 (31.0.101.2115)
+INFO [wgpu_core::instance] Adapter Vulkan AdapterInfo { name: "Intel(R) HD Graphics 530", vendor: 32902, device: 6427, device_type: IntegratedGpu, driver: "Intel Corporation", driver_info: "Intel driver", backend: Vulkan }
+INFO [iced_wgpu::window::compositor] Selected: AdapterInfo {
+    name: "Intel(R) HD Graphics 530",
+    vendor: 32902,
+    device: 6427,
+    device_type: IntegratedGpu,
+    driver: "Intel Corporation",
+    driver_info: "Intel driver",
+    backend: Vulkan,
+}
+INFO [iced_wgpu::window::compositor] Available formats: Copied {
+    it: Iter(
+        [
+            Bgra8UnormSrgb,
+            Rgba8UnormSrgb,
+            Bgra8Unorm,
+            Rgba8Unorm,
+        ],
+    ),
+}
+INFO [iced_wgpu::window::compositor] Available alpha modes: [
+    Opaque,
+    Inherit,
+]
+INFO [iced_wgpu::window::compositor] Selected format: Bgra8UnormSrgb with alpha mode: Auto
+INFO [iced_winit::program] Window attributes for id `Id(
+    1,
+)`: WindowAttributes {
+    inner_size: Some(
+        Logical(
+            LogicalSize {
+                width: 800.0,
+                height: 600.0,
+            },
+        ),
+    ),
+    min_inner_size: None,
+    max_inner_size: None,
+    position: Some(
+        Physical(
+            PhysicalPosition {
+                x: 283,
+                y: 84,
+            },
+        ),
+    ),
+    resizable: true,
+    enabled_buttons: WindowButtons(
+        CLOSE | MINIMIZE | MAXIMIZE,
+    ),
+    title: "Mass CoverArt",
+    maximized: false,
+    visible: false,
+    transparent: false,
+    blur: false,
+    decorations: true,
+    window_icon: None,
+    preferred_theme: None,
+    resize_increments: None,
+    content_protected: false,
+    window_level: Normal,
+    active: true,
+    cursor: Icon(
+        Default,
+    ),
+    parent_window: None,
+    fullscreen: None,
+    platform_specific: PlatformSpecificWindowAttributes {
+        owner: None,
+        menu: None,
+        taskbar_icon: None,
+        no_redirection_bitmap: false,
+        drag_and_drop: true,
+        skip_taskbar: false,
+        class_name: "Window Class",
+        decoration_shadow: false,
+        backdrop_type: Auto,
+        clip_children: true,
+        border_color: None,
+        title_background_color: None,
+        title_text_color: None,
+        corner_preference: None,
+    },
+}
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+INFO [mass_coverart::api::queue] queue is started for 0
+INFO [mass_coverart::api::yt_music] Fetching youtube music search: https://music.youtube.com/search?q="AURORA The Sanctuary" "To Be Alright"
+INFO [mass_coverart::api::bandcamp] Fetching search: https://bandcamp.com/search?q=%22AURORA+The+Sanctuary%22+%22To+Be+Alright%22
+INFO [yt_search::search] Performing search for query: AURORA The Sanctuary To Be Alright audio
+INFO [yt_search::search] Applied filters: SearchFilters { sort_by: None, duration: None }
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+INFO [mass_coverart::api::musicbrainz] Found 0 matches in 0 search
+INFO [mass_coverart::api::musicbrainz] finished in 403ms
+INFO [mass_coverart::api::yt_music] finished in 12674ms
+INFO [mass_coverart::api::bandcamp] Found 0 matches in search
+INFO [mass_coverart::api::bandcamp] finished in 19542ms
+INFO [yt_search::search] Found 16 results
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+INFO [mass_coverart::api::yt] finished in 56019ms
+INFO [mass_coverart::api::queue] queue is joined for 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
+ERROR [mass_coverart::app::iced_app] attempt to access invalid song 0
