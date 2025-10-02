@@ -430,7 +430,7 @@ impl CoverUI {
                     }
                     SourceFinished => {
                         let now = self.state.songs[id].sources_finished.0;
-                        self.state.songs[id].sources_finished = (now - 1, Queue::TOTAL_SOURCES)
+                        self.state.songs[id].sources_finished = (now + 1, Queue::TOTAL_SOURCES)
                     }
                 }
             }
