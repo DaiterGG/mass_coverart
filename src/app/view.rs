@@ -1,19 +1,18 @@
 use iced::{
-    alignment::Horizontal::{self},
-    widget::{
-        column, container,
-        image::Viewer,
-        row,
-        scrollable::{Direction, Scrollbar},
-        Space,
-    },
     Alignment::{self},
     Element,
     Length::{Fill, FillPortion},
+    alignment::Horizontal::{self},
+    widget::{
+        Space, column, container,
+        image::Viewer,
+        row,
+        scrollable::{Direction, Scrollbar},
+    },
 };
 
 use crate::app::{iced_app::CoverUI, song::Song, styles::*};
-use crate::{app::iced_app::Message, ImgHandle};
+use crate::{ImgHandle, app::iced_app::Message};
 use iced::widget::scrollable;
 use iced::widget::{button, checkbox, stack, text, text_input};
 

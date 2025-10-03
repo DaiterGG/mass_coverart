@@ -383,7 +383,7 @@ impl Song {
         let border = this.selected_img == img.hash;
         let mut info_col = Column::new().spacing(INFO_ROW_GAP);
 
-        let stategy = if ui.state.img_settings.square {
+        let strategy = if ui.state.img_settings.square {
             iced::ContentFit::Cover
         } else {
             iced::ContentFit::Contain
@@ -448,7 +448,7 @@ impl Song {
         } else {
             center(
                 image(img.preview.as_ref().unwrap())
-                    .content_fit(stategy)
+                    .content_fit(strategy)
                     .width(ART_WH)
                     .height(ART_WH),
             )
