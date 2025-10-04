@@ -1,5 +1,6 @@
 use anyhow::{Error, bail};
 use iced::Length::Fill;
+use log::info;
 use rfd::FileHandle;
 use std::{
     fmt::Debug,
@@ -155,12 +156,8 @@ pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<TagData>, Error> {
                 continue;
             }
             let res = parse_path(item, true);
-            match res {
-                Ok(mut files) => {
-                    all_files.append(&mut files);
-                }
-                // skip errors in subdir
-                Err(_) => {}
+            if let Ok(mut files) = res {
+                all_files.append(&mut files);
             }
         }
     } else if p.is_symlink() {
@@ -187,7 +184,7 @@ pub fn is_rtl(s: &str) -> bool {
     }
     false
 }
-pub fn apply_selected(ui: &mut CoverUI, id: SongId) {
+pub fn apply_selected(ui: &mut CoverUI, id: SongId) -> Result<(), Error> {
     let song = &mut ui.state.songs[id];
     let selected_img_hash = song.selected_img;
     let mut selected_img = None;
@@ -198,6 +195,7 @@ pub fn apply_selected(ui: &mut CoverUI, id: SongId) {
         }
     }
     if let Some(img) = selected_img {
+        info!("final img {}", img.image.dbg());
         let (fin, fin_type, fin_prev) = img.final_img(&ui.state.img_settings);
         song.original_art = Some(fin_prev);
 
@@ -207,7 +205,7 @@ pub fn apply_selected(ui: &mut CoverUI, id: SongId) {
         };
         let tags = &mut song.tag_data.file;
         tags.set_album_cover(pic);
-        tags.write_to_path(song.tag_data.path.to_str().unwrap())
-            .unwrap();
+        tags.write_to_path(song.tag_data.path.to_str().unwrap())?;
     }
+    Ok(())
 }

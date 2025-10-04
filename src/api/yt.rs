@@ -16,7 +16,7 @@ use crate::{
     },
     app::{
         iced_app::Message,
-        song_img::{ImgFormat::Jpg, LazyImage, SongImg},
+        song_img::{ImageProgress, ImgFormat::Jpg, SongImg},
     },
 };
 
@@ -25,7 +25,7 @@ pub async fn youtube(tags: TagsInput, tx: Sender<Message>) -> Result<(), Error> 
     let client = Client::new();
     if tags.album.is_some() && tags.artist.is_some() {
         let prompt = format!(
-            "{} {} album",
+            "{} {}",
             filter_for_query(tags.artist.as_ref().unwrap()),
             filter_for_query(tags.album.as_ref().unwrap()),
         );
@@ -82,6 +82,7 @@ async fn with_prompt(
                 tags,
                 results[i].video_id.clone(),
                 results[i].title.clone(),
+                results[i].channel_name.clone(),
                 tx.clone(),
                 src,
             )
@@ -99,7 +100,8 @@ async fn get_img(
     client: Client,
     tags: &TagsInput,
     link_id: String,
-    mut feedback: String,
+    title: String,
+    channel: String,
     tx: Sender<Message>,
     src: Source,
 ) -> Result<(), Error> {
@@ -108,20 +110,29 @@ async fn get_img(
         format!("https://img.youtube.com/vi/{}/hq720.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
     ];
-    let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
+    // mq can be in different aspect ratio that all other thumbnails versions for some reason
+    // let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
+    let small_url = format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id);
 
     let pic = shared::get_img(client, vec![small_url])
         .await
         .inspect_err(|e| {
             warn!("image could not download {link_id}, {e}");
         })?;
-    if pic.len() == 1097 {
-        info!("\"No image\" received");
-    }
 
-    feedback.insert_str(0, "title: ");
+    let mut feedback = title;
+    feedback.insert_str(0, "video title: ");
+    feedback.push_str("\nchannel name: ");
+    feedback.push_str(&channel);
+    feedback.push_str("\nurl: https://www.youtube.com/watch?v=");
+    feedback.push_str(&link_id);
 
-    let new_img = SongImg::new(Jpg, LazyImage::RawPreview(url_patterns, pic), src, feedback);
+    let new_img = SongImg::new(
+        Jpg,
+        ImageProgress::RawPreview(url_patterns, pic),
+        src,
+        feedback,
+    );
     send_song(new_img, tx.clone(), tags).await;
 
     Ok(())

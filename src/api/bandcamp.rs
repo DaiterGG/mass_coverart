@@ -12,11 +12,11 @@ use crate::{
             Source::{self, *},
             TagsInput,
         },
-        shared::{self, send_message, send_song},
+        shared::{self, filter_for_query, send_message, send_song},
     },
     app::{
         iced_app::Message,
-        song_img::{ImgFormat, LazyImage, SongImg},
+        song_img::{ImageProgress, ImgFormat, SongImg},
     },
 };
 
@@ -28,22 +28,22 @@ pub async fn bandcamp(tags: TagsInput, tx: Sender<Message>) -> Result<(), Error>
     if tags.title.is_some() && tags.artist.is_some() {
         let query = format!(
             "\"{}\" \"{}\"",
-            tags.artist.as_ref().unwrap(),
-            tags.title.as_ref().unwrap()
+            filter_for_query(tags.artist.as_ref().unwrap()),
+            filter_for_query(tags.title.as_ref().unwrap()),
         );
 
-        let _ = with_query(&tags, tx.clone(), &query, Bandcamp, client.clone())
+        let _ = with_query(&tags, tx.clone(), &query, BandcampTitle, client.clone())
             .await
             .inspect_err(|e| warn!("request failed: {} {} {e}", tags.id, query));
     }
     if tags.album.is_some() && tags.artist.is_some() {
         let query = format!(
             "\"{}\" \"{}\"",
-            tags.artist.as_ref().unwrap(),
-            tags.album.as_ref().unwrap()
+            filter_for_query(tags.artist.as_ref().unwrap()),
+            filter_for_query(tags.album.as_ref().unwrap()),
         );
 
-        with_query(&tags, tx.clone(), &query, Bandcamp, client.clone())
+        with_query(&tags, tx.clone(), &query, BandcampAlbum, client.clone())
             .await
             .inspect_err(|e| warn!("request failed: {} {} {e}", tags.id, query))?;
     }
@@ -67,7 +67,6 @@ async fn with_query(
 
     let search_results_html = client.get(&search_url).send().await?.text().await?;
 
-    info!("Doc dump: {}", search_results_html);
     // https://sourceforge.net/p/album-art/src/ci/main/tree/Scripts/Scripts/bandcamp.boo
     //    let re = Regex::new(r#"(?s)<li class="searchresult[^>]*>.*?<a class="artcont" href="([^"]+)".*?<img src="([^"]+)"[^>]*>.*?<div class="heading">\s*<a[^>]*>([^<]+)</a>"#)
     let re = Regex::new(r#"(?s)<li class="searchresult[^>]*>.*?<a class="artcont" href="([^"?]+)[^"]*".*?<img src="([^"]+)"[^>]*>.*?<div class="heading">\s*<a[^>]*>([^<]+)</a>"#)
@@ -144,14 +143,14 @@ async fn fetch_and_send_artwork(
     feedback: String,
     src: Source,
 ) -> Result<(), Error> {
-    println!("Attempting to fetch artwork from: {}", full_url);
+    info!("Attempting to fetch bandcamp artwork from: {}", full_url);
 
     let image_data =
         shared::get_img(client.clone(), vec![thumb_url.clone(), full_url.clone()]).await?;
 
     let song_img = SongImg::new(
         ImgFormat::Jpg,
-        LazyImage::RawPreview(vec![full_url], image_data),
+        ImageProgress::RawPreview(vec![full_url], image_data),
         src,
         feedback,
     );

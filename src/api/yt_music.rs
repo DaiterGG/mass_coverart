@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{Error, bail};
 use iced::futures::channel::mpsc::Sender;
-use log::{info, warn};
+use log::{info, trace, warn};
 use regex::{Captures, Regex};
 use reqwest::Client;
 use serde_json::to_string;
@@ -20,7 +20,7 @@ use crate::{
     },
     app::{
         iced_app::Message,
-        song_img::{ImgFormat::Jpg, LazyImage, SongImg},
+        song_img::{ImageProgress, ImgFormat::Jpg, SongImg},
     },
 };
 
@@ -138,18 +138,17 @@ async fn get_img(
         .inspect_err(|e| {
             warn!("image could not download {link_id}, {e}");
         })?;
-    if pic.len() == 1097 {
-        info!("\"No image\" received");
-        return Ok(());
-    }
 
+    // title scraping is inconsistent
     // feedback.insert_str(0, "title: ");
+    let mut feedback = "url: https://www.youtube.com/watch?v=".to_string();
+    feedback.push_str(&link_id);
 
     let new_img = SongImg::new(
         Jpg,
-        LazyImage::RawPreview(url_patterns, pic),
+        ImageProgress::RawPreview(url_patterns, pic),
         src,
-        "".to_string(),
+        feedback,
     );
     send_song(new_img, tx.clone(), tags).await;
 

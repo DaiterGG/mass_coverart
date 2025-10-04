@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bytes::Bytes;
 use iced::{
     Element,
@@ -8,10 +10,11 @@ use iced::{
         Column, Container, MouseArea, Row, Space, button, center, column, container, mouse_area,
         row,
         scrollable::{Direction, Scrollbar},
-        text, text_input,
+        space, stack, text, text_input,
         tooltip::Position,
     },
 };
+use log::info;
 use rand::RngCore;
 
 use crate::{
@@ -20,8 +23,8 @@ use crate::{
         iced_app::{CoverUI, Message},
         song_img::{ImgHash, ImgId, SongImg},
         styles::{
-            button_st, filler_st, image_selected_st, img_scroll_st, input_st, item_cont_st,
-            preview_box_st, select_menu_st,
+            button_st, filler_st, image_hover_st, image_selected_st, img_scroll_st, input_st,
+            item_cont_st, preview_box_st, select_menu_st,
         },
         view::{BTN_SIZE, INNER_TEXT_SIZE, TEXT_SIZE},
     },
@@ -76,12 +79,14 @@ pub struct Song {
     pub selected_img: ImgHash,
     /// y out of x
     pub sources_finished: (i32, i32),
+    // TODO: turn this into vec of vecs
     /// size of groups, used to sort imgs when new one is added
     /// ```text
     /// [ |----gr1 = 3 ---|,|gr2 = 2 -| ]
     /// [ img1, img2, img3, img4, img5, img6 ]
     /// ```
     pub img_groups: Vec<i32>,
+    // TODO: make unsorted
     /// Images ordered for display
     pub imgs: Vec<SongImg>,
 }
@@ -110,29 +115,36 @@ impl Song {
     pub fn generate_view_list(ui: &CoverUI) -> iced::widget::Column<'_, Message> {
         let mut list = column![].padding(8).spacing(5);
 
+        // Fix to a performance issue that never existed
+        //
         // Calculate list height beforehand
-        let mut real_h = 0.0;
-        for i in 0..ui.state.songs.len() {
-            real_h += ui.state.songs[i].state.state_to_h();
-        }
-        let pos = ui.state.list_offset;
-        let center = real_h * pos;
-        let start = f32::max(center - CENTER_OFFSET, 0.0);
-        let end = f32::min(center + CENTER_OFFSET, real_h);
+        // let mut real_h = 0.0;
+        // for i in 0..ui.state.songs.len() {
+        //     real_h += ui.state.songs[i].state.state_to_h();
+        // }
+        // let pos = ui.state.list_scroll;
+        // let center = real_h * pos;
+        // let start = f32::max(center - CENTER_OFFSET, 0.0);
+        // let end = f32::min(center + CENTER_OFFSET, real_h);
 
         // Draw empty boxes when item is not on screen
-        let mut real_h = 0.0;
+        // let mut real_h = 0.0;
+        let mut sub_list: Vec<iced::Element<'_, _, _, _>> =
+            Vec::with_capacity(ui.state.songs.len());
         for i in 0..ui.state.songs.len() {
             let h = ui.state.songs[i].state.state_to_h();
-            if real_h >= start && real_h <= end && h > 0.0 {
-                list = list.push(Self::generate_list_item(i, ui));
-            } else if h > 0.0 {
-                list = list.push(Space::new(0, h));
+            if h > 0.0 {
+                // if real_h < start || real_h > end {
+                sub_list.push(Self::generate_list_item(i, ui).into());
+                //         } else {
+                //             sub_list.push(Self::generate_list_item(i, ui).into());
+                //         }
             }
-            real_h += h;
+            //     real_h += h;
         }
+        // info!("{} {} {} {} {real_h} ", pos, center, start, end);
 
-        list
+        list.extend(sub_list)
     }
     pub fn generate_list_item<'a>(
         id: SongId,
@@ -148,6 +160,8 @@ impl Song {
         };
 
         let this = &ui.state.songs[id];
+        let theme = ui.theme.as_ref().unwrap();
+        let palette = theme.extended_palette();
         let mut path_str = this.tag_data.path.as_path().to_string_lossy().to_string();
         limit_path(&mut path_str);
 
@@ -155,7 +169,7 @@ impl Song {
         let artist = if is_rtl(&artist) {
             Element::from(
                 text(artist)
-                    .color(ui.theme().extended_palette().background.base.text)
+                    .color(palette.background.base.text)
                     .width(Fill)
                     .size(INNER_TEXT_SIZE),
             )
@@ -173,7 +187,7 @@ impl Song {
         let title = if is_rtl(&title) {
             Element::from(
                 text(title)
-                    .color(ui.theme().extended_palette().background.base.text)
+                    .color(palette.background.base.text)
                     .width(Fill)
                     .size(INNER_TEXT_SIZE),
             )
@@ -191,7 +205,7 @@ impl Song {
         let album = if is_rtl(&album) {
             Element::from(
                 text(album)
-                    .color(ui.theme().extended_palette().background.base.text)
+                    .color(palette.background.base.text)
                     .width(Fill)
                     .size(INNER_TEXT_SIZE),
             )
@@ -208,7 +222,7 @@ impl Song {
         let sources_label = text("finished:")
             .size(TEXT_SIZE)
             .height(BTN_SIZE)
-            .color(ui.theme().extended_palette().background.strong.text)
+            .color(palette.background.strong.text)
             .line_height(INFO_LINE_H);
 
         let sources = text(format!(
@@ -219,10 +233,11 @@ impl Song {
         .width(Fill)
         .line_height(INFO_LINE_H)
         .size(TEXT_SIZE);
+
         let path_label = text("path:")
             .size(TEXT_SIZE)
             .height(BTN_SIZE)
-            .color(ui.theme().extended_palette().background.strong.text)
+            .color(palette.background.strong.text)
             .line_height(INFO_LINE_H);
         let path = text(path_str)
             .height(BTN_SIZE)
@@ -230,6 +245,7 @@ impl Song {
             .line_height(INFO_LINE_H)
             .size(TEXT_SIZE);
         let btn = |s| button(h3(s).center()).clip(true).height(BTN_SIZE);
+
         let cont = match this.state {
             SongState::Confirm => container(
                 row![
@@ -238,16 +254,16 @@ impl Song {
                         text("title:")
                             .size(TEXT_SIZE)
                             .height(BTN_SIZE)
-                            .color(ui.theme().extended_palette().background.strong.text)
+                            .color(palette.background.strong.text)
                             .line_height(INFO_LINE_H),
                         text("album:")
                             .size(TEXT_SIZE)
                             .height(BTN_SIZE)
-                            .color(ui.theme().extended_palette().background.strong.text)
+                            .color(palette.background.strong.text)
                             .line_height(INFO_LINE_H),
                         text("artist:")
                             .size(TEXT_SIZE)
-                            .color(ui.theme().extended_palette().background.strong.text)
+                            .color(palette.background.strong.text)
                             .height(BTN_SIZE)
                             .line_height(INFO_LINE_H),
                     ]
@@ -262,7 +278,10 @@ impl Song {
                             ]
                             .spacing(INFO_COLUMN_GAP),
                             if let Some(cover) = &ui.state.songs[id].original_art {
-                                row![Space::new(INFO_COLUMN_GAP, 0), container(image(cover))]
+                                row![
+                                    space().width(INFO_COLUMN_GAP).height(1),
+                                    container(image(cover))
+                                ]
                             } else {
                                 row![]
                             }
@@ -280,7 +299,7 @@ impl Song {
                             .on_press(DiscardSong(id)),
                     ]
                     .spacing(INFO_COLUMN_GAP)
-                    .width(80),
+                    .width(80)
                 ]
                 .align_y(Vertical::Center)
                 .spacing(INFO_ROW_GAP),
@@ -295,12 +314,10 @@ impl Song {
                         .push(
                             text("Update tags (TODO)")
                                 .size(TEXT_SIZE)
-                                .color(ui.theme().extended_palette().background.strong.text)
+                                .color(palette.background.strong.text)
                                 .height(BTN_SIZE)
                                 .line_height(INFO_LINE_H)
                         )
-                        // row![],
-                        //
                         .spacing(INFO_COLUMN_GAP)
                         .height(Fill),
                     column![
@@ -329,7 +346,7 @@ impl Song {
                     .center()
                     .size(50)
                     .height(Fill)
-                    .color(ui.theme().extended_palette().background.weak.text)
+                    .color(palette.background.weak.text)
                     .width(400),
             )
             .height(MAIN_H),
@@ -338,7 +355,7 @@ impl Song {
                 text("Loading...")
                     .center()
                     .size(50)
-                    .color(ui.theme().extended_palette().background.weak.text)
+                    .color(palette.background.weak.text)
                     .height(Fill)
                     .width(400),
             )
@@ -381,7 +398,7 @@ impl Song {
         let this = &ui.state.songs[id];
         let img = &this.imgs[img_iter];
         let border = this.selected_img == img.hash;
-        let mut info_col = Column::new().spacing(INFO_ROW_GAP);
+        let mut info_col = Column::new().spacing(INFO_ROW_GAP - 5.0);
 
         let strategy = if ui.state.img_settings.square {
             iced::ContentFit::Cover
@@ -409,57 +426,67 @@ impl Song {
                 .center()
                 .width(Fill),
         );
-        let mut cont = if this.menu_img == img.hash {
-            center(
-                column![
-                    center(
-                        column![
-                            button(text("select").size(INNER_TEXT_SIZE).center())
-                                .on_press(Message::ImgSelect(id, img.hash))
-                                .height(BTN_SIZE)
-                                .width(70)
-                                .style(button_st),
-                            button(text("preview").size(INNER_TEXT_SIZE).center())
-                                .on_press(Message::ImgPreviewOpen(id, img_iter))
-                                .height(BTN_SIZE)
-                                .width(70)
-                                .style(button_st),
-                        ]
-                        .spacing(INFO_ROW_GAP)
-                    )
-                    .width(Fill),
-                    container(tooltip(
-                        text("about...").center().size(INNER_TEXT_SIZE),
-                        container(info_col)
-                            .max_width(500)
-                            .padding(4)
-                            .style(select_menu_st),
-                        Position::FollowCursor
-                    ))
-                    .center_x(Fill)
-                ]
-                .width(ART_WH)
-                .height(ART_WH)
-                .padding(20)
-                .spacing(20),
-            )
-            .padding(10)
-            .style(select_menu_st)
-        } else {
+        let mut cont = container(stack![
             center(
                 image(img.preview.as_ref().unwrap())
                     .content_fit(strategy)
                     .width(ART_WH)
                     .height(ART_WH),
             )
-            .padding(10)
-        };
+            .padding(10),
+            if this.menu_img == img.hash {
+                center(
+                    container(
+                        column![
+                            center(
+                                column![
+                                    button(text("select").size(INNER_TEXT_SIZE).center())
+                                        .on_press(Message::ImgSelect(id, img.hash))
+                                        .height(BTN_SIZE)
+                                        .width(70)
+                                        .style(button_st),
+                                    button(text("preview").size(INNER_TEXT_SIZE).center())
+                                        .on_press(Message::ImgPreviewOpen(id, img_iter))
+                                        .height(BTN_SIZE)
+                                        .width(70)
+                                        .style(button_st),
+                                ]
+                                .spacing(INFO_ROW_GAP)
+                            )
+                            .width(Fill),
+                            container(
+                                tooltip(
+                                    text("about...").center().size(INNER_TEXT_SIZE),
+                                    container(info_col)
+                                        .max_width(500)
+                                        .padding(4)
+                                        .style(select_menu_st),
+                                    Position::FollowCursor
+                                )
+                                .gap(10)
+                                .snap_within_viewport(true)
+                            )
+                            .center_x(Fill)
+                        ]
+                        .width(ART_WH)
+                        .height(ART_WH)
+                        .padding(20)
+                        .spacing(20),
+                    )
+                    .style(image_hover_st),
+                )
+                .padding(10)
+            } else {
+                center(space())
+            },
+        ]);
         if border {
             cont = cont.style(image_selected_st);
         }
         mouse_area(cont.width(ART_ROW_H).height(ART_ROW_H))
-            .on_press(Message::ImgMenuToggle(true, id, img.hash))
             .on_exit(Message::ImgMenuToggle(false, id, img.hash))
+            .on_enter(Message::ImgMenuToggle(true, id, img.hash))
+            .on_press(Message::ImgMenuToggle(true, id, img.hash))
     }
 }
 

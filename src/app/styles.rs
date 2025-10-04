@@ -1,8 +1,8 @@
 use iced::{
     Border, Color, Theme, border,
     theme::{
-        Palette,
-        palette::{self, Danger, Extended, Pair, Primary, Secondary, Success},
+        Custom, Palette,
+        palette::{self, Danger, Extended, Pair, Primary, Secondary, Success, Warning},
     },
     widget::{
         button::{self},
@@ -24,14 +24,16 @@ pub fn miasma_theme() -> Theme {
     let text = Color::from_rgb8(215, 196, 131);
     let success = Color::from_rgb8(95, 135, 95);
     let danger = Color::from_rgb8(104, 87, 66);
+    let warning = Color::from_rgb8(104, 87, 66);
     Theme::custom_with_fn(
-        "custom".to_string(),
+        "miasma".to_string(),
         Palette {
             text,
             primary,
             success,
             danger,
             background: bg,
+            warning,
         },
         |_| Extended {
             primary: Primary::generate(primary, bg, text),
@@ -45,8 +47,19 @@ pub fn miasma_theme() -> Theme {
                     color: bg_strong,
                     text: bg_strong_text,
                 },
+                weakest: Pair::new(bg, text),
+                neutral: Pair::new(bg, text),
+                weaker: Pair::new(bg, text),
+                stronger: Pair::new(bg, text),
+                strongest: Pair::new(bg, text),
             },
-            secondary: Secondary::generate(secondary, secondary),
+
+            warning: Warning::generate(warning, bg, text),
+            secondary: Secondary {
+                base: Pair::new(secondary, text),
+                weak: Pair::new(secondary, text),
+                strong: Pair::new(secondary, text),
+            },
             success: Success::generate(success, bg, text),
             danger: Danger::generate(danger, bg, text),
             is_dark: true,
@@ -152,6 +165,22 @@ pub fn add_remove(theme: &Theme, status: button::Status) -> button::Style {
     }
 }
 
+pub fn image_hover_st(theme: &Theme) -> container::Style {
+    let p = theme.extended_palette();
+
+    let mut bg = p.background.strong.color;
+    bg.a = 0.6;
+    container::Style {
+        background: Some(bg.into()),
+        border: Border {
+            width: 0.0,
+            radius: 0.0.into(),
+            color: p.danger.base.color,
+        },
+        text_color: Some(p.background.base.text),
+        ..container::Style::default()
+    }
+}
 pub fn select_menu_st(theme: &Theme) -> container::Style {
     let p = theme.extended_palette();
 

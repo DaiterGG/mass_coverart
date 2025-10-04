@@ -4,15 +4,19 @@ use iced::{
     Length::{Fill, FillPortion},
     alignment::Horizontal::{self},
     widget::{
-        Space, column, container,
+        column, container,
         image::Viewer,
         row,
         scrollable::{Direction, Scrollbar},
+        space,
     },
 };
 
-use crate::app::{iced_app::CoverUI, song::Song, styles::*};
 use crate::{ImgHandle, app::iced_app::Message};
+use crate::{
+    TaskHandle,
+    app::{iced_app::CoverUI, song::Song, styles::*},
+};
 use iced::widget::scrollable;
 use iced::widget::{button, checkbox, stack, text, text_input};
 
@@ -31,13 +35,13 @@ pub enum PreviewState {
     Loading,
     Error,
     Display(ImgHandle),
-    Downloading,
+    Downloading(TaskHandle),
 }
 
 pub fn view(ui: &CoverUI) -> Element<'_, Message> {
     use Message::*;
 
-    let theme = ui.theme();
+    let theme = ui.theme.as_ref().unwrap();
 
     let h2 = |s| {
         text(s)
@@ -139,7 +143,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             regex = regex.push(add);
         }
     }
-    let header_color = ui.theme().extended_palette().background.strong.text;
+    let header_color = theme.extended_palette().background.strong.text;
     let files_panel = column![
         text("Open")
             .size(H1_SIZE)
@@ -207,10 +211,11 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         .direction(Direction::Vertical(
             Scrollbar::new().margin(0).scroller_width(15),
         ))
+        .anchor_bottom()
         .width(Fill)
         .height(Fill)
         .spacing(9)
-        .on_scroll(|v| Offset(v.relative_offset().y))
+        .on_scroll(|v| Scroll(v.relative_offset().y))
         .style(list_scroll_st);
     // let size = 50;
     // let scroll = 30;
@@ -235,13 +240,13 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 .width(Fill)
                 .height(Fill)
                 .style(list_bg_st),
-            Space::new(20, 0)
+            space().width(20).height(1)
         ],
         list,
         // row![list, text("").width(4)].width(Fill).height(Fill),
         row![
             container("").width(Fill).height(Fill).style(list_border_st),
-            Space::new(20, 0)
+            space().width(20).height(1)
         ],
     ];
 
@@ -263,20 +268,20 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 .height(Fill)
                 .width(Fill),
             column![
-                Space::new(0, FillPortion(1)),
+                space().width(1).height(FillPortion(1)),
                 row![
-                    Space::new(FillPortion(1), 0),
+                    space().height(1).width(FillPortion(1)),
                     container(match &ui.state.preview_img {
                         PreviewState::Display(h) =>
                             container(Viewer::new(h).height(Fill).width(Fill)),
                         PreviewState::Error => container(
-                            text("Error ocured")
+                            text("Error occurred")
                                 .center()
                                 .size(50)
                                 .height(Fill)
                                 .width(Fill),
                         ),
-                        PreviewState::Downloading => container(
+                        PreviewState::Downloading(_) => container(
                             text("Downloading...")
                                 .center()
                                 .size(50)
@@ -296,9 +301,9 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                     .padding(6)
                     .width(FillPortion(6))
                     .height(FillPortion(6)),
-                    Space::new(FillPortion(1), 0),
+                    space().height(1).width(FillPortion(1)),
                 ],
-                Space::new(0, FillPortion(1)),
+                space().width(1).height(FillPortion(1)),
             ]
             .height(Fill)
             .width(Fill),

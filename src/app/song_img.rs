@@ -1,13 +1,14 @@
 use audiotags::MimeType;
 use bytes::Bytes;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Luma};
+use log::{info, warn};
 use rand::{RngCore, rng};
 
 use crate::{ImgHandle, api::queue::Source};
 
 use std::{io::Cursor, sync::Arc};
 
-use anyhow::Error;
+use anyhow::{Error, bail};
 use iced::widget::image::Handle;
 use image::{
     GenericImageView, ImageReader,
@@ -21,7 +22,7 @@ use crate::{app::song::GroupSize, parser::file_parser::TagData};
 const THRESHOLD: f64 = 0.3;
 const SORT_LIMIT: usize = 15;
 const PREVIEW_DIM: u32 = 200;
-const COMPARE_DIM: u32 = 100;
+const COMPARE_DIM: u32 = 200;
 
 #[derive(Clone, Copy, Debug)]
 pub struct ImageSettings {
@@ -77,6 +78,7 @@ impl ImgFormat {
                     ImgFormat::Jpg
                 } else {
                     // Default fallback
+                    warn!("format was not parsed from url {}", url);
                     ImgFormat::Jpg
                 }
             }
@@ -85,28 +87,39 @@ impl ImgFormat {
 }
 type SortSample = ImageBuffer<Luma<u8>, Vec<u8>>;
 #[derive(Clone, Debug)]
-pub enum LazyImage {
+pub enum ImageProgress {
     RawPreview(Vec<String>, Bytes),
     Raw(Bytes),
     Preview(Vec<String>),
     Decoded(DynamicImage),
 }
+impl ImageProgress {
+    pub fn dbg(&self) -> String {
+        match self {
+            Self::RawPreview(_, _) => "RawP".to_string(),
+            Self::Raw(_) => "Raw".to_string(),
+            Self::Preview(_) => "Prev".to_string(),
+            Self::Decoded(_) => "Dec".to_string(),
+        }
+    }
+}
 
 pub type ImgId = usize;
 pub type ImgHash = u64;
 #[derive(Clone, Debug)]
+/// * `orig_format`: format of the full image, preview image format will be guessed
 pub struct SongImg {
     pub hash: ImgHash,
     pub orig_format: ImgFormat,
     pub src: Source,
-    pub image: LazyImage,
+    pub image: ImageProgress,
     pub orig_res: Option<(u32, u32)>,
     pub preview: Option<ImgHandle>,
     pub sample: Option<SortSample>,
     pub feedback: String,
 }
 impl SongImg {
-    pub fn new(format: ImgFormat, image: LazyImage, src: Source, feedback: String) -> Self {
+    pub fn new(format: ImgFormat, image: ImageProgress, src: Source, feedback: String) -> Self {
         Self {
             image,
             orig_format: format,
@@ -120,51 +133,57 @@ impl SongImg {
     }
     pub fn decoded(&self) -> DynamicImage {
         match &self.image {
-            LazyImage::Decoded(d) => d.clone(),
-            _ => panic!("not decoded"),
+            ImageProgress::Decoded(d) => d.clone(),
+            _ => panic!(""),
         }
     }
 
-    pub async fn decode_and_sample(
-        mut self,
-        sem: Arc<Semaphore>,
-        set: ImageSettings,
-    ) -> Result<SongImg, Error> {
+    pub async fn decode_and_sample(mut self, sem: Arc<Semaphore>) -> Result<SongImg, Error> {
         let permit = sem.acquire().await.unwrap();
 
         let (urls, bytes) = match &mut self.image {
-            LazyImage::Raw(b) => (None, b),
-            LazyImage::RawPreview(url, b) => (Some(url), b),
+            ImageProgress::Raw(b) => (None, b),
+            ImageProgress::RawPreview(url, b) => (Some(url), b),
             _ => panic!("not raw"),
         };
 
-        let mut decoded =
-            ImageReader::with_format(Cursor::new(bytes), self.orig_format.imageio()).decode()?;
+        // small preview img can be in different format for ex. png and 250jpg
+        let res = ImageReader::new(Cursor::new(bytes))
+            .with_guessed_format()?
+            .decode();
+        if let Err(e) = res {
+            bail!(
+                "preview img was not decoded: {e}, format: {:?}, urls: {:?}, feedback: {} ",
+                self.orig_format,
+                urls,
+                self.feedback
+            );
+        }
+
+        let decoded = res.unwrap();
         let (w, h) = decoded.dimensions();
         if let Some(urls) = urls {
-            self.image = LazyImage::Preview(urls.to_vec());
+            self.image = ImageProgress::Preview(urls.to_vec());
         } else {
             self.orig_res = Some((w, h));
-            self.image = LazyImage::Decoded(decoded.clone());
+            self.image = ImageProgress::Decoded(decoded.clone());
         }
 
         yield_now().await;
 
-        // store full, crop at display
-        // if set.square && w > h {
-        //     decoded = decoded.crop_imm(w / 2 - h / 2, 0, h, h);
-        // }
-
         let dyn_img = decoded.thumbnail(PREVIEW_DIM, PREVIEW_DIM);
         yield_now().await;
-        let prev_dim = dyn_img.dimensions();
+        let (w, h) = dyn_img.dimensions();
         let dyn_clone = dyn_img.clone();
+
+        let dyn_img = dyn_img.crop_imm(w / 2 - h / 2, 0, h, h);
+
         let dyn_img = dyn_img.thumbnail_exact(COMPARE_DIM, COMPARE_DIM);
         yield_now().await;
 
         let prev = dyn_clone.into_rgba8().into_vec();
         let prev = Bytes::from_owner(prev);
-        self.preview = Some(Handle::from_rgba(prev_dim.0, prev_dim.1, prev));
+        self.preview = Some(Handle::from_rgba(w, h, prev));
 
         let samp = dyn_img.clone().into_luma8();
         self.sample = Some(samp);
@@ -179,7 +198,7 @@ impl SongImg {
         let preprocessed = ImageReader::with_format(Cursor::new(bytes), from_mime(img.mime_type))
             .decode()
             .ok()?;
-        let preprocessed = preprocessed.resize_to_fill(PREVIEW_DIM, PREVIEW_DIM, Nearest);
+        let preprocessed = preprocessed.thumbnail(PREVIEW_DIM * 2, PREVIEW_DIM);
         let (w, h) = preprocessed.dimensions();
         let rgb = preprocessed.to_rgba8();
         let bytes = Bytes::from_owner(rgb.into_raw());
@@ -281,7 +300,8 @@ impl SongImg {
         let (w, h) = preprocessed.dimensions();
         self.orig_res = Some((w, h));
 
-        self.image = LazyImage::Decoded(preprocessed);
+        info!("img decoded {}", self.feedback);
+        self.image = ImageProgress::Decoded(preprocessed);
         Ok(())
     }
     /// self.image has to be decoded
@@ -320,7 +340,7 @@ impl SongImg {
         } else {
             raw
         };
-        let (_, h) = cropped.dimensions();
+        let (w, h) = cropped.dimensions();
 
         if set.downscale < h {
             cropped.resize(9999, set.downscale, Triangle)

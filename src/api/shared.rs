@@ -1,28 +1,34 @@
 use anyhow::{Error, bail};
 use bytes::Bytes;
-use iced::{
-    futures::{SinkExt, channel::mpsc::Sender},
-    widget::shader::wgpu::Queue,
-};
-use log::warn;
+use iced::futures::channel::mpsc::Sender;
+use log::{info, warn};
 use reqwest::Client;
 use tokio::task::yield_now;
 
 use crate::{
-    api::queue::{QueueMessage, Source, TagsInput},
-    app::{iced_app::Message, song::SongId, song_img::SongImg},
+    api::queue::{QueueMessage, TagsInput},
+    app::{iced_app::Message, song_img::SongImg},
 };
 
 pub async fn get_img(client: Client, urls: Vec<String>) -> Result<Bytes, Error> {
     let mut last_error = None;
     for url in &urls {
+        info!("Trying to get img: {}", url);
         let req = client.get(url).build()?;
 
         match client.execute(req).await {
-            Ok(response) => return Ok(response.bytes().await?),
+            Ok(response) => {
+                info!("Getting img body, url: {}", response.url());
+                let pic = response.bytes().await?;
+                if pic.len() == 1097 {
+                    last_error = Some(anyhow::Error::msg("\"No image\" received"));
+                    continue;
+                }
+                return Ok(pic);
+            }
             Err(e) => {
                 warn!("failed to get img {url}");
-                last_error = Some(e);
+                last_error = Some(Error::new(e));
             }
         }
     }

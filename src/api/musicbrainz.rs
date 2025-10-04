@@ -21,8 +21,8 @@ use crate::api::{
 use crate::app::{
     iced_app::Message,
     song_img::{
+        ImageProgress::*,
         ImgFormat::{self},
-        LazyImage::*,
         SongImg,
     },
 };
@@ -49,7 +49,7 @@ pub async fn musicbrainz(tags: TagsInput, tx: Sender<Message>) -> Result<(), Err
             .release(tags.title.as_ref().unwrap())
             .build();
 
-        with_query(&tags, tx.clone(), &query, BrainzAlbum, &client)
+        with_query(&tags, tx.clone(), &query, BrainzTitle, &client)
             .await
             .inspect_err(|e| warn!("request failed: {} {query} {e}", tags.id))?;
     }
@@ -70,7 +70,7 @@ async fn with_query(
         .execute_with_client(b_client)
         .await?;
 
-    info!("Found {} matches in {} search", query_result.count, tags.id);
+    info!("Found {} matches in song {}", query_result.count, tags.id);
 
     for release in query_result.entities {
         let artists = if let Some(vec) = release.artist_credit {
@@ -111,6 +111,7 @@ async fn with_query(
                     if res.is_err() {
                         continue;
                     }
+                    info!("only full picture available for {:?}", tags.hash);
                     Raw(res.unwrap())
                 };
                 let new_img = SongImg::new(

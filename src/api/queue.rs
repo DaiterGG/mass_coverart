@@ -26,7 +26,8 @@ pub enum Source {
     YoutubeTitle,
     BrainzAlbum,
     BrainzTitle,
-    Bandcamp,
+    BandcampAlbum,
+    BandcampTitle,
     YoutubeMusicAlbum,
     YoutubeMusicTitle,
 }
@@ -37,7 +38,8 @@ impl Display for Source {
             Self::YoutubeTitle => write!(f, "youtube.com (%artist% %title% audio)"),
             Self::BrainzAlbum => write!(f, "musicbrainz.com (%artist% %album%)"),
             Self::BrainzTitle => write!(f, "musicbrainz.com (%artist% %title%)"),
-            Self::Bandcamp => write!(f, "bandcamp.com (%artist% %album%)"),
+            Self::BandcampAlbum => write!(f, "bandcamp.com (%artist% %album%)"),
+            Self::BandcampTitle => write!(f, "bandcamp.com (%artist% %title%)"),
             Self::YoutubeMusicAlbum => write!(f, "music.youtube.com (%artist% %album%)"),
             Self::YoutubeMusicTitle => write!(f, "music.youtube.com (%artist% %title%)"),
         }
@@ -79,9 +81,9 @@ impl Queue {
     pub const TOTAL_SOURCES: i32 = 4;
     async fn queue(tags: TagsInput, tx: Sender<Message>) {
         let mut set = JoinSet::new();
-        // set.spawn(youtube_music(tags.clone(), tx.clone()));
+        set.spawn(musicbrainz(tags.clone(), tx.clone()));
+        set.spawn(youtube_music(tags.clone(), tx.clone()));
         set.spawn(youtube(tags.clone(), tx.clone()));
-        // set.spawn(musicbrainz(tags.clone(), tx.clone()));
         set.spawn(bandcamp(tags.clone(), tx.clone()));
         info!("queue is started for {}", tags.id);
         send_message(
@@ -94,7 +96,7 @@ impl Queue {
         info!("queue is joined for {}", tags.id);
 
         for log in logs {
-            let _ = log.inspect_err(|e| warn!("error ocured in queue of {} - {e}", tags.id));
+            let _ = log.inspect_err(|e| warn!("error occurred in queue of {} - {e}", tags.id));
         }
         send_message(
             &tags,
