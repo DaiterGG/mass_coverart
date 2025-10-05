@@ -6,6 +6,7 @@ use std::{
     fmt::Debug,
     fs::{read, read_dir},
     path::{Path, PathBuf},
+    time::Instant,
 };
 
 use audiotags::{AudioTag, Picture, Tag};
@@ -107,7 +108,7 @@ impl TagData {
 pub async fn get_tags_data(
     path_vec: Vec<FileHandle>,
     set: ParseSettings,
-) -> Result<Vec<TagData>, Error> {
+) -> Result<Vec<Song>, Error> {
     let mut ret = Vec::new();
     for path in path_vec {
         let mut tags = parse_path(path.into(), set.recursive)?;
@@ -118,7 +119,8 @@ pub async fn get_tags_data(
     }
     Ok(ret)
 }
-pub fn parse_tags(data: &mut TagData, set: &ParseSettings) {
+pub fn parse_tags(song: &mut Song, set: &ParseSettings) {
+    let data = &mut song.tag_data;
     data.artist = data.file.artist().map(|s| s.to_string());
     data.title = data.file.title().map(|s| s.to_string());
     data.album = data.file.album_title().map(|s| s.to_string());
@@ -138,15 +140,13 @@ pub fn parse_tags(data: &mut TagData, set: &ParseSettings) {
         .unwrap()
         .reg_to_settings(&remaider, data);
 }
-pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<TagData>, Error> {
-    let mut all_files: Vec<TagData> = Vec::new();
+pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<Song>, Error> {
+    let mut all_files = Vec::new();
     let p: &Path = path.as_ref();
     if p.is_file() {
         let res = parse_file(path);
-        match res {
-            Ok(file) => all_files.push(file),
-            // skip errors on individual files
-            Err(_) => {}
+        if let Ok(file) = res {
+            all_files.push(file)
         }
     } else if p.is_dir() {
         let all = read_dir(path)?;
@@ -170,9 +170,9 @@ pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<TagData>, Error> {
     }
     Ok(all_files)
 }
-pub fn parse_file(path: PathBuf) -> Result<TagData, Error> {
+pub fn parse_file(path: PathBuf) -> Result<Song, Error> {
     let file = Tag::new().read_from_path(&path)?;
-    Ok(TagData::new(path, file))
+    Ok(Song::new(TagData::new(path, file)))
 }
 pub fn is_rtl(s: &str) -> bool {
     let cs = s.chars();

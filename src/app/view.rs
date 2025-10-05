@@ -196,6 +196,14 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 .style(check_st),
         ]
         .spacing(10),
+        row![
+            h2("start auto process"),
+            checkbox("", ui.state.auto_mod)
+                .on_toggle(AutoModToggle)
+                .size(BTN_SIZE)
+                .style(check_st),
+        ]
+        .spacing(10),
     ]
     .spacing(10);
     let header = row![

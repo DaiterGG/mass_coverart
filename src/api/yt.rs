@@ -111,8 +111,9 @@ async fn get_img(
         format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
     ];
     // mq can be in different aspect ratio that all other thumbnails versions for some reason
-    // let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
-    let small_url = format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id);
+    // might pair it with sddefault since it also have different res
+    let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
+    // let small_url = format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id);
 
     let pic = shared::get_img(client, vec![small_url])
         .await

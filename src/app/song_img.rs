@@ -6,7 +6,7 @@ use rand::{RngCore, rng};
 
 use crate::{ImgHandle, api::queue::Source};
 
-use std::{io::Cursor, sync::Arc};
+use std::{io::Cursor, sync::Arc, time::Instant};
 
 use anyhow::{Error, bail};
 use iced::widget::image::Handle;
@@ -59,11 +59,17 @@ impl ImgFormat {
             Self::Jpg => MimeType::Jpeg,
         }
     }
+
+    pub fn from_imageio(format: ImageFormat) -> Self {
+        match format {
+            ImageFormat::Png => Self::Png,
+            ImageFormat::Jpeg => Self::Jpg,
+            _ => Self::Jpg,
+        }
+    }
     pub fn from_url(url: &str) -> Self {
-        // Remove query parameters and fragments
         let clean_url = url.split(['?', '#']).next().unwrap_or(url);
 
-        // Extract file extension
         let extension = clean_url.rsplit('.').next().unwrap_or("").to_lowercase();
 
         match extension.as_str() {
@@ -147,7 +153,6 @@ impl SongImg {
             _ => panic!("not raw"),
         };
 
-        // small preview img can be in different format for ex. png and 250jpg
         let res = ImageReader::new(Cursor::new(bytes))
             .with_guessed_format()?
             .decode();
@@ -192,16 +197,20 @@ impl SongImg {
         Ok(self)
     }
     pub fn original_image_preview(tag: &TagData) -> Option<ImgHandle> {
+        let time = Instant::now();
         let img = tag.file.album_cover()?;
         let bytes = Bytes::from_owner(img.data.to_owned());
 
-        let preprocessed = ImageReader::with_format(Cursor::new(bytes), from_mime(img.mime_type))
+        let preprocessed = ImageReader::new(Cursor::new(bytes))
+            .with_guessed_format()
+            .ok()?
             .decode()
             .ok()?;
         let preprocessed = preprocessed.thumbnail(PREVIEW_DIM * 2, PREVIEW_DIM);
         let (w, h) = preprocessed.dimensions();
         let rgb = preprocessed.to_rgba8();
         let bytes = Bytes::from_owner(rgb.into_raw());
+        info!("{}", time.elapsed().as_millis());
         Some(Handle::from_rgba(w, h, bytes))
     }
     pub fn push_and_group(
@@ -295,8 +304,12 @@ impl SongImg {
     pub fn preview_to_decoded(&mut self, bytes: Bytes, format: ImgFormat) -> Result<(), Error> {
         self.orig_format = format;
 
-        let preprocessed =
-            ImageReader::with_format(Cursor::new(bytes), self.orig_format.imageio()).decode()?;
+        let guessed = ImageReader::new(Cursor::new(bytes)).with_guessed_format()?;
+
+        // in case url extension lied
+        self.orig_format = ImgFormat::from_imageio(guessed.format().unwrap());
+
+        let preprocessed = guessed.decode()?;
         let (w, h) = preprocessed.dimensions();
         self.orig_res = Some((w, h));
 

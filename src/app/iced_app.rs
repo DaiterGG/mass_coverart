@@ -12,7 +12,7 @@ use iced::{
     Length::Fill,
     Subscription, Task, Theme, event, exit,
     futures::channel::mpsc::Sender,
-    keyboard::{Event::KeyReleased, Key, key::Named},
+    keyboard::{Event::KeyReleased, Key, Modifiers, key::Named},
     stream,
     widget::{Column, Space, button, column, container, image, scrollable, stack},
     window::{self, icon},
@@ -42,7 +42,7 @@ pub enum Message {
     FolderOpenStart,
     GotPath(Vec<FileHandle>),
     CreateSongs(Vec<TagData>),
-    PushSong(Song),
+    PushSongs(Vec<Song>),
     PathDropped(Vec<FileHandle>),
     DownscaleInput(String),
     AddRegex,
@@ -56,7 +56,8 @@ pub enum Message {
     TitleInput(SongId, String),
     AlbumInput(SongId, String),
     ArtistInput(SongId, String),
-    ConfirmSong(SongId),
+    ConfirmSongIfNot(SongId),
+    AutoModToggle(bool),
     DiscardSong(SongId),
     GoBackDiscard(SongId),
     GoBack(SongId),
@@ -67,6 +68,7 @@ pub enum Message {
 
     // INFO: potentially return imgs into mtx
     FromQueue(SongId, SongHash, QueueMessage),
+    ConfirmLastSong,
     ProcessedArt(SongId, SongHash, SongImg),
     Scroll(f32),
     ImgSelect(SongId, ImgHash),
@@ -90,6 +92,8 @@ pub struct State {
     pub ui_loading: bool,
     pub parse_settings: ParseSettings,
     pub init_size: (f32, f32),
+    pub auto_mod: bool,
+    pub auto_mod_current_song: usize,
     pub img_settings: ImageSettings,
 }
 pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
@@ -159,13 +163,13 @@ impl CoverUI {
                         ))))
                 )
                 .chain(Task::future(async {
-                    ConfirmSong(0)
+                    ConfirmSongIfNot(0)
                 }));
             }
-            Exit => return exit(),
             Nothing => {}
             GotPath(vec) => {
                 self.state.ui_loading = false;
+
                 return Task::perform(
                     get_tags_data(vec, self.state.parse_settings.clone()),
                     |res| {
@@ -173,25 +177,13 @@ impl CoverUI {
                             warn!("{e}");
                             return Nothing;
                         }
-                        CreateSongs(res.unwrap())
+                        PushSongs(res.unwrap())
                     },
                 );
             }
-            CreateSongs(tags) => {
-                return Task::stream(stream::channel(1, |mut tx: Sender<Message>| async move {
-                    for tag in tags {
-                        let mut tried = tx.try_send(PushSong(Song::new(tag)));
-                        while let Err(e) = tried
-                            && !e.is_full()
-                        {
-                            tried = tx.try_send(e.into_inner());
-                        }
-                        yield_now().await;
-                    }
-                }));
-            }
-            PushSong(song) => {
-                self.state.songs.push(song);
+            PushSongs(songs) => {
+                self.state.songs.extend(songs);
+                info!("{} songs now", self.state.songs.len());
             }
             FileOpenStart => {
                 self.state.ui_blocked = true;
@@ -358,6 +350,7 @@ impl CoverUI {
                             "accepted img was not decoded: {e}, format: {format:?}, feedback: {} ",
                             self.state.songs[song_id].imgs[img_id].feedback
                         );
+                        self.state.songs[song_id].state = SongState::Main;
                         return Task::none();
                     }
 
@@ -371,16 +364,18 @@ impl CoverUI {
                 }
                 return Task::done(GoBack(song_id));
             }
-            ConfirmSong(id) => {
-                let info = TagsInput::from_data(
-                    id,
-                    self.state.songs[id].hash,
-                    &self.state.songs[id].tag_data,
-                );
-                self.state.songs[id].state = SongState::Main;
-                let (q, handle) = Queue::init(info);
-                self.state.songs[id].queue_handle = Some(handle);
-                return q;
+            ConfirmSongIfNot(id) => {
+                if self.state.songs.len() > id && self.state.songs[id].state == SongState::Confirm {
+                    let info = TagsInput::from_data(
+                        id,
+                        self.state.songs[id].hash,
+                        &self.state.songs[id].tag_data,
+                    );
+                    self.state.songs[id].state = SongState::Main;
+                    let (q, handle) = Queue::init(info);
+                    self.state.songs[id].queue_handle = Some(handle);
+                    return q;
+                }
             }
             GoBackDiscard(id) => return Task::done(GoBack(id)).chain(Task::done(DiscardSong(id))),
 
@@ -392,6 +387,9 @@ impl CoverUI {
                 self.state.songs[id].img_groups.clear();
                 self.state.songs[id].menu_close();
                 self.state.songs[id].unselect();
+                if self.state.auto_mod {
+                    return Task::done(ConfirmLastSong);
+                }
             }
             DiscardSong(id) => {
                 self.state.songs[id].state = SongState::Hidden;
@@ -470,12 +468,40 @@ impl CoverUI {
                         );
                     }
                     SetSources(num, out_of) => {
-                        self.state.songs[id].sources_finished = (num, out_of)
+                        self.state.songs[id].sources_finished = (num, out_of);
+                        if self.state.auto_mod && num == out_of {
+                            let mut task = Task::none();
+                            if self.state.songs[id].state == SongState::Main
+                                && !self.state.songs[id].imgs.is_empty()
+                            {
+                                let hash = self.state.songs[id].imgs[0].hash;
+                                task = task.chain(Task::done(ImgSelect(id, hash)));
+                            }
+                            return task.chain(Task::done(ConfirmLastSong));
+                        }
                     }
                     SourceFinished => {
                         let now = self.state.songs[id].sources_finished.0;
                         self.state.songs[id].sources_finished = (now + 1, Queue::TOTAL_SOURCES)
                     }
+                }
+            }
+            ConfirmLastSong => {
+                let cur = self.state.auto_mod_current_song;
+                // current song in process right now
+                if self.state.songs.len() > cur {
+                    let song = &mut self.state.songs[cur];
+                    let (a, b) = song.sources_finished;
+                    if song.state != SongState::Confirm && a != b {
+                        return Task::none();
+                    }
+                }
+                for i in (0..self.state.songs.len()).rev() {
+                    if self.state.songs[i].state != SongState::Confirm {
+                        continue;
+                    }
+                    self.state.auto_mod_current_song = i;
+                    return Task::done(ConfirmSongIfNot(i));
                 }
             }
             ProcessedArt(id, hash, output) => {
@@ -490,20 +516,31 @@ impl CoverUI {
             Scroll(scroll_uv) => {
                 self.state.list_scroll = scroll_uv;
             }
+            AutoModToggle(on) => {
+                self.state.auto_mod = on;
+                if on {
+                    return Task::done(ConfirmLastSong);
+                }
+            }
             _ => unimplemented!("unhandled message"),
         }
         Task::none()
     }
-    pub fn subscription(&self) -> Subscription<Message> {
+    pub fn subscription(&self) -> Subscription<Task<Message>> {
         event::listen_with(|event, _status, _windows| match event {
             Event::Window(window::Event::FileDropped(path)) => {
-                Some(Message::PathDropped(vec![path.into()]))
+                Some(Task::done(Message::PathDropped(vec![path.into()])))
             }
             Event::Keyboard(KeyReleased {
                 #[cfg(debug_assertions)]
                     key: Key::Named(Named::Escape),
                 ..
-            }) => Some(Message::Exit),
+            })
+            | Event::Keyboard(KeyReleased {
+                key: Key::Named(Named::F4),
+                modifiers: Modifiers::ALT,
+                ..
+            }) => Some(exit()),
             _ => None,
         })
     }

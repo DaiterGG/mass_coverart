@@ -19,6 +19,7 @@ use rand::RngCore;
 
 use crate::{
     ImgHandle, TaskHandle,
+    api::queue::{self, Queue},
     app::{
         iced_app::{CoverUI, Message},
         song_img::{ImgHash, ImgId, SongImg},
@@ -100,7 +101,7 @@ impl Song {
             tag_data,
             hash: rand::rng().next_u64(),
             menu_img: 0,
-            sources_finished: (0, 0),
+            sources_finished: (0, Queue::TOTAL_SOURCES),
             selected_img: 0,
             img_groups: Vec::new(),
             imgs: Vec::new(),
@@ -292,7 +293,7 @@ impl Song {
                         btn("confirm")
                             .width(Fill)
                             .style(button_st)
-                            .on_press(ConfirmSong(id)),
+                            .on_press(ConfirmSongIfNot(id)),
                         btn("remove")
                             .width(Fill)
                             .style(button_st)
