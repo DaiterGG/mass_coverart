@@ -8,8 +8,9 @@ use std::io::Cursor;
 
 use app::iced_app::CoverUI;
 use flexi_logger::{Duplicate::Info, FileSpec, LogSpecification, Logger};
-use iced::Size;
+use iced::{Preset, Size};
 use image::{ImageFormat, ImageReader, codecs::jpeg::JpegDecoder};
+use log::Log;
 use reqwest::Client;
 use serde::Deserialize;
 pub type ImgHandle = iced::widget::image::Handle;
@@ -19,8 +20,19 @@ pub type TaskHandle = iced::task::Handle;
 struct PossibleRedirect {
     pub url: String,
 }
+// TODO: uncovered: grandson - one step closer
 fn main() -> Result<(), anyhow::Error> {
-    Logger::with(LogSpecification::info())
+    #[cfg(debug_assertions)]
+    unsafe {
+        use std::env;
+
+        env::set_var("RUST_BACKTRACE", "full");
+    }
+
+    let lvl = LogSpecification::info();
+    #[cfg(debug_assertions)]
+    let lvl = LogSpecification::info();
+    Logger::with(lvl)
         .log_to_file(
             FileSpec::default()
                 .basename("mass_coverart")

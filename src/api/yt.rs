@@ -16,7 +16,7 @@ use crate::{
     },
     app::{
         iced_app::Message,
-        song_img::{ImageProgress, ImgFormat::Jpg, SongImg},
+        song_img::{ImageProgress, ImgFormat::Jpeg, SongImg},
     },
 };
 
@@ -108,6 +108,8 @@ async fn get_img(
     let url_patterns = vec![
         format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/hq720.jpg", link_id),
+        format!("https://img.youtube.com/vi/{}/sd2.jpg", link_id),
+        format!("https://img.youtube.com/vi/{}/sd3.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
     ];
     // mq can be in different aspect ratio that all other thumbnails versions for some reason
@@ -129,7 +131,7 @@ async fn get_img(
     feedback.push_str(&link_id);
 
     let new_img = SongImg::new(
-        Jpg,
+        Jpeg,
         ImageProgress::RawPreview(url_patterns, pic),
         src,
         feedback,

@@ -1,11 +1,14 @@
 use core::{hash, panic};
 use std::{
+    io::Cursor,
     path::PathBuf,
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     vec,
 };
 
+use ::image::ImageReader;
+use audiotags::Picture;
 use bytes::Bytes;
 use iced::{
     Element, Event,
@@ -23,12 +26,13 @@ use rfd::{AsyncFileDialog, FileHandle};
 use tokio::{sync::Semaphore, task::yield_now, time::sleep};
 
 use crate::{
+    ImgHandle,
     api::{
         queue::{Queue, QueueMessage, Source::YoutubeAlbum, TagsInput},
         shared,
     },
     app::{
-        song::{Song, SongHash, SongId, SongState},
+        song::{OrigArt, Song, SongHash, SongId, SongState},
         song_img::{ImageProgress, ImageSettings, ImgFormat, ImgHash, ImgId, SongImg},
         styles::*,
         view::{PreviewState, REGEX_LIM, view},
@@ -68,7 +72,7 @@ pub enum Message {
 
     // INFO: potentially return imgs into mtx
     FromQueue(SongId, SongHash, QueueMessage),
-    ConfirmLastSong,
+    AutoModTrigger,
     ProcessedArt(SongId, SongHash, SongImg),
     Scroll(f32),
     ImgSelect(SongId, ImgHash),
@@ -77,6 +81,8 @@ pub enum Message {
     ImgPreviewSet(PreviewState),
     DecodePreview(Bytes, ImgFormat, SongId, ImgId),
     ImgMenuToggle(bool, SongId, ImgHash),
+    LoadOrigImg(SongId),
+    SetOrigImg(ImgHandle, SongId, SongHash),
     Start,
     AfterStart,
     Exit,
@@ -99,7 +105,7 @@ pub struct State {
 pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
     if id >= st.songs.len()
     // FIXME:
-    // || self.state.songs[output.id].hash != output.hash
+    || st.songs[id].hash != hash
     {
         error!("attempt to access invalid song {}", id);
         true
@@ -117,8 +123,11 @@ impl CoverUI {
     pub fn init(init_size: (f32, f32)) -> (Self, Task<Message>) {
         let t = window::oldest()
             .and_then(move |id| {
-                let icon =
-                    icon::from_file_data(include_bytes!("../../resources/icon.png"), None).unwrap();
+                let icon = icon::from_file_data(
+                    include_bytes!("../../resources/icon.png"),
+                    Some(::image::ImageFormat::Png),
+                )
+                .unwrap();
                 window::set_icon(id, icon)
             })
             .chain(Task::done(Message::Start));
@@ -140,11 +149,11 @@ impl CoverUI {
 
         match message {
             Start => {
-                #[cfg(debug_assertions)]
-                return Task::done(GotPath(vec![
-                    PathBuf::new().join("D:\\desk\\mass_coverart\\foo\\").into(),
-                ]))
-                .chain(Task::done(AfterStart));
+                // #[cfg(debug_assertions)]
+                // return Task::done(GotPath(vec![
+                //     PathBuf::new().join("D:\\desk\\mass_coverart\\foo\\").into(),
+                // ]))
+                // .chain(Task::done(AfterStart));
             }
             AfterStart => {
                 #[cfg(debug_assertions)]
@@ -156,7 +165,7 @@ impl CoverUI {
                             0,
                             0,
                         QueueMessage::GotArt(SongImg::new(
-                         ImgFormat::Jpg,
+                         ImgFormat::Jpeg,
                          ImageProgress::Raw(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
                         YoutubeAlbum,
                         "AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA ".to_string()
@@ -165,6 +174,9 @@ impl CoverUI {
                 .chain(Task::future(async {
                     ConfirmSongIfNot(0)
                 }));
+            }
+            Exit => {
+                return exit();
             }
             Nothing => {}
             GotPath(vec) => {
@@ -299,26 +311,22 @@ impl CoverUI {
                 }
                 if let Some(img_id) = selected_img_id {
                     let img = &mut song.imgs[img_id];
-
-                    info!("Apply Select final img {}", img.image.dbg());
-                    if let ImageProgress::Preview(urls) = &img.image {
+                    let task = if let ImageProgress::Preview(urls) = &img.image {
                         song.state = SongState::MainDownloading;
                         let format = ImgFormat::from_url(urls.first().unwrap());
-                        return Task::perform(
-                            shared::get_img(Client::new(), urls.to_vec()),
-                            move |res| {
-                                if let Ok(bytes) = res {
-                                    DecodeAccept(bytes, format, song_id)
-                                } else {
-                                    error!("{}", res.unwrap_err());
-                                    AcceptFailed(song_id)
-                                }
-                            },
-                        );
+                        Task::perform(shared::get_img(Client::new(), urls.to_vec()), move |res| {
+                            if let Ok(bytes) = res {
+                                DecodeAccept(bytes, format, song_id)
+                            } else {
+                                error!("{}", res.unwrap_err());
+                                AcceptFailed(song_id)
+                            }
+                        })
                     } else {
                         song.state = SongState::MainLoading;
-                        return Task::done(ApplySelected(song_id));
-                    }
+                        Task::done(ApplySelected(song_id))
+                    };
+                    return task.chain(Task::done(AutoModTrigger));
                 }
             }
 
@@ -340,11 +348,6 @@ impl CoverUI {
                     let res =
                         self.state.songs[song_id].imgs[img_id].preview_to_decoded(bytes, format);
 
-                    info!(
-                        "DecodeAccept final img {} {}",
-                        self.state.songs[song_id].imgs[img_id].image.dbg(),
-                        self.state.songs[song_id].imgs[img_id].hash
-                    );
                     if let Err(e) = res {
                         error!(
                             "accepted img was not decoded: {e}, format: {format:?}, feedback: {} ",
@@ -387,9 +390,7 @@ impl CoverUI {
                 self.state.songs[id].img_groups.clear();
                 self.state.songs[id].menu_close();
                 self.state.songs[id].unselect();
-                if self.state.auto_mod {
-                    return Task::done(ConfirmLastSong);
-                }
+                return Task::done(AutoModTrigger);
             }
             DiscardSong(id) => {
                 self.state.songs[id].state = SongState::Hidden;
@@ -473,11 +474,12 @@ impl CoverUI {
                             let mut task = Task::none();
                             if self.state.songs[id].state == SongState::Main
                                 && !self.state.songs[id].imgs.is_empty()
+                                && self.state.songs[id].selected_img == 0
                             {
                                 let hash = self.state.songs[id].imgs[0].hash;
                                 task = task.chain(Task::done(ImgSelect(id, hash)));
                             }
-                            return task.chain(Task::done(ConfirmLastSong));
+                            return task.chain(Task::done(AutoModTrigger));
                         }
                     }
                     SourceFinished => {
@@ -486,22 +488,24 @@ impl CoverUI {
                     }
                 }
             }
-            ConfirmLastSong => {
-                let cur = self.state.auto_mod_current_song;
-                // current song in process right now
-                if self.state.songs.len() > cur {
-                    let song = &mut self.state.songs[cur];
-                    let (a, b) = song.sources_finished;
-                    if song.state != SongState::Confirm && a != b {
-                        return Task::none();
+            AutoModTrigger => {
+                if self.state.auto_mod {
+                    let cur = self.state.auto_mod_current_song;
+                    // current song in process right now
+                    if cur < self.state.songs.len() {
+                        let song = &mut self.state.songs[cur];
+                        let (a, b) = song.sources_finished;
+                        if song.state == SongState::Main && a != b {
+                            return Task::none();
+                        }
                     }
-                }
-                for i in (0..self.state.songs.len()).rev() {
-                    if self.state.songs[i].state != SongState::Confirm {
-                        continue;
+                    for i in (cur + 1)..self.state.songs.len() {
+                        if self.state.songs[i].state != SongState::Confirm {
+                            continue;
+                        }
+                        self.state.auto_mod_current_song = i;
+                        return Task::done(ConfirmSongIfNot(i));
                     }
-                    self.state.auto_mod_current_song = i;
-                    return Task::done(ConfirmSongIfNot(i));
                 }
             }
             ProcessedArt(id, hash, output) => {
@@ -518,18 +522,39 @@ impl CoverUI {
             }
             AutoModToggle(on) => {
                 self.state.auto_mod = on;
-                if on {
-                    return Task::done(ConfirmLastSong);
+                self.state.auto_mod_current_song = 0;
+                return Task::done(AutoModTrigger);
+            }
+
+            LoadOrigImg(song_id) => {
+                let song = &mut self.state.songs[song_id];
+                song.original_art = Some(OrigArt::Loading);
+
+                let img = song.tag_data.file.album_cover().unwrap();
+                let hash = song.hash;
+                return Task::perform(
+                    SongImg::original_image_preview(img.data.to_owned(), img.mime_type),
+                    move |res| {
+                        if let Some(h) = res {
+                            return SetOrigImg(h, song_id, hash);
+                        }
+                        Nothing
+                    },
+                );
+            }
+            SetOrigImg(handle, id, hash) => {
+                if !song_is_invalid(&self.state, id, hash) {
+                    self.state.songs[id].original_art = Some(OrigArt::Loaded(handle));
                 }
             }
             _ => unimplemented!("unhandled message"),
         }
         Task::none()
     }
-    pub fn subscription(&self) -> Subscription<Task<Message>> {
+    pub fn subscription(&self) -> Subscription<Message> {
         event::listen_with(|event, _status, _windows| match event {
             Event::Window(window::Event::FileDropped(path)) => {
-                Some(Task::done(Message::PathDropped(vec![path.into()])))
+                Some(Message::PathDropped(vec![path.into()]))
             }
             Event::Keyboard(KeyReleased {
                 #[cfg(debug_assertions)]
@@ -540,7 +565,7 @@ impl CoverUI {
                 key: Key::Named(Named::F4),
                 modifiers: Modifiers::ALT,
                 ..
-            }) => Some(exit()),
+            }) => Some(Message::Exit),
             _ => None,
         })
     }

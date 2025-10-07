@@ -1,4 +1,4 @@
-use audiotags::MimeType;
+use audiotags::{MimeType, Picture};
 use bytes::Bytes;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Luma};
 use log::{info, warn};
@@ -43,28 +43,28 @@ impl Default for ImageSettings {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ImgFormat {
-    Jpg,
+    Jpeg,
     Png,
 }
 impl ImgFormat {
     pub fn imageio(&self) -> ImageFormat {
         match self {
             Self::Png => ImageFormat::Png,
-            Self::Jpg => ImageFormat::Jpeg,
+            Self::Jpeg => ImageFormat::Jpeg,
         }
     }
     pub fn audiotags(&self) -> MimeType {
         match self {
             Self::Png => MimeType::Png,
-            Self::Jpg => MimeType::Jpeg,
+            Self::Jpeg => MimeType::Jpeg,
         }
     }
 
     pub fn from_imageio(format: ImageFormat) -> Self {
         match format {
             ImageFormat::Png => Self::Png,
-            ImageFormat::Jpeg => Self::Jpg,
-            _ => Self::Jpg,
+            ImageFormat::Jpeg => Self::Jpeg,
+            _ => Self::Jpeg,
         }
     }
     pub fn from_url(url: &str) -> Self {
@@ -73,7 +73,7 @@ impl ImgFormat {
         let extension = clean_url.rsplit('.').next().unwrap_or("").to_lowercase();
 
         match extension.as_str() {
-            "jpg" | "jpeg" => ImgFormat::Jpg,
+            "jpg" | "jpeg" => ImgFormat::Jpeg,
             "png" => ImgFormat::Png,
             _ => {
                 // Try to detect from the entire URL as fallback
@@ -81,11 +81,11 @@ impl ImgFormat {
                 if url_lower.contains(".png") {
                     ImgFormat::Png
                 } else if url_lower.contains(".jpg") || url_lower.contains(".jpeg") {
-                    ImgFormat::Jpg
+                    ImgFormat::Jpeg
                 } else {
                     // Default fallback
                     warn!("format was not parsed from url {}", url);
-                    ImgFormat::Jpg
+                    ImgFormat::Jpeg
                 }
             }
         }
@@ -196,9 +196,11 @@ impl SongImg {
         drop(permit);
         Ok(self)
     }
-    pub fn original_image_preview(tag: &TagData) -> Option<ImgHandle> {
-        let time = Instant::now();
-        let img = tag.file.album_cover()?;
+    pub async fn original_image_preview(img: Vec<u8>, mime_type: MimeType) -> Option<ImgHandle> {
+        let img = Picture {
+            data: &img,
+            mime_type,
+        };
         let bytes = Bytes::from_owner(img.data.to_owned());
 
         let preprocessed = ImageReader::new(Cursor::new(bytes))
@@ -210,7 +212,6 @@ impl SongImg {
         let (w, h) = preprocessed.dimensions();
         let rgb = preprocessed.to_rgba8();
         let bytes = Bytes::from_owner(rgb.into_raw());
-        info!("{}", time.elapsed().as_millis());
         Some(Handle::from_rgba(w, h, bytes))
     }
     pub fn push_and_group(
@@ -337,7 +338,7 @@ impl SongImg {
         let mut new_img = Vec::<u8>::new();
         let mut buf = Cursor::new(&mut new_img);
         let format = if set.jpg {
-            ImgFormat::Jpg
+            ImgFormat::Jpeg
         } else {
             self.orig_format
         };

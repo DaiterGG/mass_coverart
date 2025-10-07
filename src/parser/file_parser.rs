@@ -14,7 +14,7 @@ use thiserror::Error;
 
 use crate::app::{
     iced_app::CoverUI,
-    song::{Song, SongId},
+    song::{OrigArt, Song, SongId},
 };
 
 #[derive(Clone, Debug)]
@@ -85,7 +85,7 @@ pub struct TagData {
     pub album: Option<String>,
 }
 impl Debug for TagData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
@@ -197,7 +197,7 @@ pub fn apply_selected(ui: &mut CoverUI, id: SongId) -> Result<(), Error> {
     if let Some(img) = selected_img {
         info!("final img {}", img.image.dbg());
         let (fin, fin_type, fin_prev) = img.final_img(&ui.state.img_settings);
-        song.original_art = Some(fin_prev);
+        song.original_art = Some(OrigArt::Loaded(fin_prev));
 
         let pic = Picture {
             data: &fin,

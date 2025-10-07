@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use iced::{
     Alignment::{self},
     Element,
@@ -11,6 +13,7 @@ use iced::{
         space,
     },
 };
+use log::info;
 
 use crate::{ImgHandle, app::iced_app::Message};
 use crate::{
@@ -214,15 +217,16 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             .padding(10),
         settings_panel.width(Fill).height(Fill)
     ];
+
     let list = Song::generate_view_list(ui);
     let list = scrollable(list)
         .direction(Direction::Vertical(
             Scrollbar::new().margin(0).scroller_width(15),
         ))
-        .anchor_bottom()
+        // .anchor_bottom()
         .width(Fill)
         .height(Fill)
-        .spacing(9)
+        // .spacing(9)
         .on_scroll(|v| Scroll(v.relative_offset().y))
         .style(list_scroll_st);
     // let size = 50;

@@ -149,7 +149,7 @@ async fn fetch_and_send_artwork(
         shared::get_img(client.clone(), vec![thumb_url.clone(), full_url.clone()]).await?;
 
     let song_img = SongImg::new(
-        ImgFormat::Jpg,
+        ImgFormat::Jpeg,
         ImageProgress::RawPreview(vec![full_url], image_data),
         src,
         feedback,

@@ -7,8 +7,8 @@ use iced::{
     Renderer, Theme,
     alignment::Vertical,
     widget::{
-        Column, Container, MouseArea, Row, Space, button, center, column, container, mouse_area,
-        row,
+        Column, Container, MouseArea, Row, Sensor, Space, button, center, column, container,
+        mouse_area, row,
         scrollable::{Direction, Scrollbar},
         space, stack, text, text_input,
         tooltip::Position,
@@ -63,41 +63,48 @@ impl SongState {
         }
     }
 }
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum OrigArt {
+    Unloaded,
+    Loading,
+    Loaded(ImgHandle),
+}
+struct ImgGroup {
+    weight: i32,
+    imgs: Vec<i32>,
+}
 
 /// Hash to check, when async queue return data
 pub type SongHash = u64;
 pub type SongId = usize;
 pub type GroupSize = i32;
-
 #[derive(Debug, Clone)]
 pub struct Song {
     pub tag_data: TagData,
     pub state: SongState,
     pub queue_handle: Option<TaskHandle>,
-    pub original_art: Option<ImgHandle>,
+    pub original_art: Option<OrigArt>,
     pub hash: SongHash,
     pub menu_img: ImgHash,
     pub selected_img: ImgHash,
     /// y out of x
     pub sources_finished: (i32, i32),
-    // TODO: turn this into vec of vecs
-    /// size of groups, used to sort imgs when new one is added
-    /// ```text
-    /// [ |----gr1 = 3 ---|,|gr2 = 2 -| ]
-    /// [ img1, img2, img3, img4, img5, img6 ]
-    /// ```
     pub img_groups: Vec<i32>,
-    // TODO: make unsorted
     /// Images ordered for display
     pub imgs: Vec<SongImg>,
 }
 
 impl Song {
     pub fn new(tag_data: TagData) -> Self {
+        let original_art = if tag_data.file.album_cover().is_some() {
+            Some(OrigArt::Unloaded)
+        } else {
+            None
+        };
         Self {
             state: SongState::Confirm,
             queue_handle: None,
-            original_art: SongImg::original_image_preview(&tag_data),
+            original_art,
             tag_data,
             hash: rand::rng().next_u64(),
             menu_img: 0,
@@ -114,44 +121,49 @@ impl Song {
         self.menu_img = 0;
     }
     pub fn generate_view_list(ui: &CoverUI) -> iced::widget::Column<'_, Message> {
-        let mut list = column![].padding(8).spacing(5);
+        let list = column![].padding(8).spacing(5);
 
-        // Fix to a performance issue that never existed
-        //
         // Calculate list height beforehand
-        // let mut real_h = 0.0;
-        // for i in 0..ui.state.songs.len() {
-        //     real_h += ui.state.songs[i].state.state_to_h();
-        // }
-        // let pos = ui.state.list_scroll;
-        // let center = real_h * pos;
-        // let start = f32::max(center - CENTER_OFFSET, 0.0);
-        // let end = f32::min(center + CENTER_OFFSET, real_h);
+        let mut real_h = 0.0;
+        for i in 0..ui.state.songs.len() {
+            real_h += ui.state.songs[i].state.state_to_h();
+        }
+        let pos = ui.state.list_scroll;
+        let center = real_h * pos;
+        let start = f32::max(center - CENTER_OFFSET, 0.0);
+        let end = f32::min(center + CENTER_OFFSET, real_h);
 
-        // Draw empty boxes when item is not on screen
-        // let mut real_h = 0.0;
+        let mut real_h = 0.0;
+
         let mut sub_list: Vec<iced::Element<'_, _, _, _>> =
             Vec::with_capacity(ui.state.songs.len());
         for i in 0..ui.state.songs.len() {
             let h = ui.state.songs[i].state.state_to_h();
             if h > 0.0 {
-                // if real_h < start || real_h > end {
-                sub_list.push(Self::generate_list_item(i, ui).into());
-                //         } else {
-                //             sub_list.push(Self::generate_list_item(i, ui).into());
-                //         }
+                if real_h < start || real_h > end {
+                    sub_list.push(Self::generate_list_item(i, ui, true).into());
+                } else {
+                    sub_list.push(Self::generate_list_item(i, ui, false).into());
+                }
+                real_h += h;
             }
-            //     real_h += h;
         }
-        // info!("{} {} {} {} {real_h} ", pos, center, start, end);
 
         list.extend(sub_list)
     }
     pub fn generate_list_item<'a>(
         id: SongId,
         ui: &CoverUI,
-    ) -> Container<'a, Message, Theme, Renderer> {
+        hide: bool,
+    ) -> Row<'a, Message, Theme, Renderer> {
         use Message::*;
+        if hide {
+            if ui.state.songs[id].state == SongState::Confirm {
+                return row![space().height(CONFIRM_H).width(1)];
+            } else {
+                return row![container(space().height(MAIN_H).width(1))];
+            }
+        }
         let h3 = |s| {
             text(s)
                 .size(INNER_TEXT_SIZE)
@@ -279,10 +291,19 @@ impl Song {
                             ]
                             .spacing(INFO_COLUMN_GAP),
                             if let Some(cover) = &ui.state.songs[id].original_art {
-                                row![
-                                    space().width(INFO_COLUMN_GAP).height(1),
-                                    container(image(cover))
-                                ]
+                                if let OrigArt::Loaded(art) = cover {
+                                    row![
+                                        space().width(INFO_COLUMN_GAP).height(1),
+                                        container(image(art))
+                                    ]
+                                } else if *cover == OrigArt::Loading {
+                                    row![]
+                                } else {
+                                    row![
+                                        Sensor::new(space().width(1).height(Fill))
+                                            .on_show(move |_| LoadOrigImg(id))
+                                    ]
+                                }
                             } else {
                                 row![]
                             }
@@ -300,7 +321,7 @@ impl Song {
                             .on_press(DiscardSong(id)),
                     ]
                     .spacing(INFO_COLUMN_GAP)
-                    .width(80)
+                    .width(80),
                 ]
                 .align_y(Vertical::Center)
                 .spacing(INFO_ROW_GAP),
@@ -363,7 +384,10 @@ impl Song {
             .height(MAIN_H),
             SongState::Hidden => panic!("Cannot draw hidden song"),
         };
-        cont.style(item_cont_st).width(Fill).padding(10)
+        row![
+            cont.style(item_cont_st).width(Fill).padding(10),
+            space().width(20).height(20)
+        ]
     }
 
     fn image_row<'a>(ui: &CoverUI, id: SongId) -> iced::widget::Scrollable<'a, Message> {
@@ -375,16 +399,23 @@ impl Song {
         }
 
         if this.imgs.is_empty() {
-            row = row.push(
-                container(
-                    text("Searching...")
-                        .center()
-                        .size(50)
-                        .height(Fill)
-                        .width(400),
-                )
-                .style(filler_st),
-            );
+            if this.sources_finished.0 == this.sources_finished.1 {
+                row = row.push(
+                    container(text("Not found").center().size(50).height(Fill).width(400))
+                        .style(filler_st),
+                );
+            } else {
+                row = row.push(
+                    container(
+                        text("Searching...")
+                            .center()
+                            .size(50)
+                            .height(Fill)
+                            .width(400),
+                    )
+                    .style(filler_st),
+                );
+            }
         }
         scrollable(row)
             .direction(Direction::Horizontal(

@@ -2,3 +2,5 @@
 /foo
 *.log
 /iced
+sign.sh
+selfsign.cer

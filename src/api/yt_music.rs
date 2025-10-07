@@ -20,7 +20,7 @@ use crate::{
     },
     app::{
         iced_app::Message,
-        song_img::{ImageProgress, ImgFormat::Jpg, SongImg},
+        song_img::{ImageProgress, ImgFormat::Jpeg, SongImg},
     },
 };
 
@@ -88,15 +88,21 @@ async fn with_prompt(
         .text()
         .await?;
 
-    let mut dedup = HashSet::new();
+    let re = Regex::new(
+        r#"\\x22text\\x22:\\x22([^\\]+?)\\x22,\\x22navigationEndpoint.*?\\x22videoId\\x22:\\x22([A-Za-z0-9_-]{11})\\x22"#,
+    )?;
     let mut results = Vec::new();
-    let re = Regex::new(r#"\\x22watchEndpoint\\x22:\\x7b\\x22videoId\\x22:\\x22([^\\]{11})"#)?;
+    let mut dedup = HashSet::new();
     for video_id in re.captures_iter(&search_results_html) {
-        if let Some(mtch) = video_id.get(0) {
-            let video_id = mtch.as_str().rsplit_once("\\x22").unwrap().1;
-            if !dedup.contains(&video_id) {
-                results.push(video_id);
-                dedup.insert(video_id);
+        if let (Some(title), Some(id)) = (video_id.get(1), video_id.get(2)) {
+            let title = title.as_str().to_string();
+            let id = id.as_str().to_string();
+            if !dedup.contains(&id) {
+                dedup.insert(id.clone());
+                results.push((title, id));
+            } else {
+                results.last_mut().unwrap().0.push('\n');
+                results.last_mut().unwrap().0.push_str(&title);
             }
         }
     }
@@ -106,8 +112,8 @@ async fn with_prompt(
         let _ = get_img(
             client.clone(),
             tags,
-            results[i].to_string(),
-            // results[i].title.clone(),
+            results[i].0.clone(),
+            results[i].1.clone(),
             tx.clone(),
             src,
         )
@@ -121,6 +127,7 @@ async fn with_prompt(
 async fn get_img(
     client: Client,
     tags: &TagsInput,
+    title: String,
     link_id: String,
     // mut feedback: String,
     tx: Sender<Message>,
@@ -129,6 +136,8 @@ async fn get_img(
     let url_patterns = vec![
         format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/hq720.jpg", link_id),
+        format!("https://img.youtube.com/vi/{}/sd2.jpg", link_id),
+        format!("https://img.youtube.com/vi/{}/sd3.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
     ];
     let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
@@ -141,11 +150,13 @@ async fn get_img(
 
     // title scraping is inconsistent
     // feedback.insert_str(0, "title: ");
-    let mut feedback = "url: https://www.youtube.com/watch?v=".to_string();
+    let mut feedback = "info: ".to_string();
+    feedback.push_str(&title);
+    feedback.push_str("\nurl: https://www.youtube.com/watch?v=");
     feedback.push_str(&link_id);
 
     let new_img = SongImg::new(
-        Jpg,
+        Jpeg,
         ImageProgress::RawPreview(url_patterns, pic),
         src,
         feedback,
