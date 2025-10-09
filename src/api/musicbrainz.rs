@@ -20,7 +20,7 @@ use crate::api::{
 };
 use crate::app::{
     iced_app::Message,
-    song_img::{
+    img::{
         ImageProgress::*,
         ImgFormat::{self},
         SongImg,

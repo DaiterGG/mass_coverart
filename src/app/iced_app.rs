@@ -1,29 +1,15 @@
-use core::{hash, panic};
-use std::{
-    io::Cursor,
-    path::PathBuf,
-    sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
-    vec,
-};
+use std::{path::PathBuf, sync::Arc, time::Duration, vec};
 
-use ::image::ImageReader;
-use audiotags::Picture;
 use bytes::Bytes;
 use iced::{
-    Element, Event,
-    Length::Fill,
-    Subscription, Task, Theme, event, exit,
-    futures::channel::mpsc::Sender,
+    Element, Event, Subscription, Task, Theme, event, exit,
     keyboard::{Event::KeyReleased, Key, Modifiers, key::Named},
-    stream,
-    widget::{Column, Space, button, column, container, image, scrollable, stack},
     window::{self, icon},
 };
-use log::{error, info, trace, warn};
+use log::{error, info, warn};
 use reqwest::Client;
 use rfd::{AsyncFileDialog, FileHandle};
-use tokio::{sync::Semaphore, task::yield_now, time::sleep};
+use tokio::{sync::Semaphore, time::sleep};
 
 use crate::{
     ImgHandle,
@@ -32,12 +18,12 @@ use crate::{
         shared,
     },
     app::{
+        img::{ImageProgress, ImageSettings, ImgFormat, ImgHash, ImgId, SongImg},
         song::{OrigArt, Song, SongHash, SongId, SongState},
-        song_img::{ImageProgress, ImageSettings, ImgFormat, ImgHash, ImgId, SongImg},
         styles::*,
         view::{PreviewState, REGEX_LIM, view},
     },
-    parser::file_parser::{ParseSettings, RegexType, TagData, apply_selected, get_tags_data},
+    parser::file_parser::{ParseSettings, RegexType, apply_selected, get_tags_data},
 };
 #[derive(Clone)]
 pub enum Message {
@@ -45,7 +31,6 @@ pub enum Message {
     PathOpenEnd(Option<Vec<FileHandle>>),
     FolderOpenStart,
     GotPath(Vec<FileHandle>),
-    CreateSongs(Vec<TagData>),
     PushSongs(Vec<Song>),
     PathDropped(Vec<FileHandle>),
     DownscaleInput(String),
@@ -97,7 +82,7 @@ pub struct State {
     pub ui_blocked: bool,
     pub ui_loading: bool,
     pub parse_settings: ParseSettings,
-    pub init_size: (f32, f32),
+    pub _init_size: (f32, f32),
     pub auto_mod: bool,
     pub auto_mod_current_song: usize,
     pub img_settings: ImageSettings,
@@ -114,7 +99,6 @@ pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
     }
 }
 pub struct CoverUI {
-    pub time: Instant,
     pub state: State,
     pub decode_sem: Arc<Semaphore>,
     pub theme: Option<Theme>,
@@ -135,9 +119,8 @@ impl CoverUI {
             Self {
                 theme: Some(miasma_theme()),
                 decode_sem: Arc::new(Semaphore::new(1)),
-                time: Instant::now(),
                 state: State {
-                    init_size,
+                    _init_size: init_size,
                     ..Default::default()
                 },
             },
@@ -149,11 +132,11 @@ impl CoverUI {
 
         match message {
             Start => {
-                // #[cfg(debug_assertions)]
-                // return Task::done(GotPath(vec![
-                //     PathBuf::new().join("D:\\desk\\mass_coverart\\foo\\").into(),
-                // ]))
-                // .chain(Task::done(AfterStart));
+                #[cfg(debug_assertions)]
+                return Task::done(GotPath(vec![
+                    PathBuf::new().join("D:\\desk\\mass_coverart\\foo\\").into(),
+                ]))
+                .chain(Task::done(AfterStart));
             }
             AfterStart => {
                 #[cfg(debug_assertions)]
@@ -547,7 +530,9 @@ impl CoverUI {
                     self.state.songs[id].original_art = Some(OrigArt::Loaded(handle));
                 }
             }
-            _ => unimplemented!("unhandled message"),
+            _ => {
+                error!("unhandled message");
+            }
         }
         Task::none()
     }

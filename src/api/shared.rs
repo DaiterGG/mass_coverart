@@ -7,7 +7,7 @@ use tokio::task::yield_now;
 
 use crate::{
     api::queue::{QueueMessage, TagsInput},
-    app::{iced_app::Message, song_img::SongImg},
+    app::{iced_app::Message, img::SongImg},
 };
 
 pub async fn get_img(client: Client, urls: Vec<String>) -> Result<Bytes, Error> {

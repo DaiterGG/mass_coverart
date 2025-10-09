@@ -22,7 +22,8 @@ use crate::{
     api::queue::{self, Queue},
     app::{
         iced_app::{CoverUI, Message},
-        song_img::{ImgHash, ImgId, SongImg},
+        img::{ImgHash, ImgId, SongImg},
+        img_group::ImgGroups,
         styles::{
             button_st, filler_st, image_hover_st, image_selected_st, img_scroll_st, input_st,
             item_cont_st, preview_box_st, select_menu_st,
@@ -69,16 +70,13 @@ pub enum OrigArt {
     Loading,
     Loaded(ImgHandle),
 }
-struct ImgGroup {
-    weight: i32,
-    imgs: Vec<i32>,
-}
 
 /// Hash to check, when async queue return data
 pub type SongHash = u64;
 pub type SongId = usize;
-pub type GroupSize = i32;
 #[derive(Debug, Clone)]
+/// * `sources_finished`: x out of y
+/// * `imgs`: only push() or empty()
 pub struct Song {
     pub tag_data: TagData,
     pub state: SongState,
@@ -87,10 +85,8 @@ pub struct Song {
     pub hash: SongHash,
     pub menu_img: ImgHash,
     pub selected_img: ImgHash,
-    /// y out of x
     pub sources_finished: (i32, i32),
-    pub img_groups: Vec<i32>,
-    /// Images ordered for display
+    pub img_groups: ImgGroups,
     pub imgs: Vec<SongImg>,
 }
 
@@ -110,7 +106,7 @@ impl Song {
             menu_img: 0,
             sources_finished: (0, Queue::TOTAL_SOURCES),
             selected_img: 0,
-            img_groups: Vec::new(),
+            img_groups: ImgGroups::new(),
             imgs: Vec::new(),
         }
     }
@@ -394,8 +390,8 @@ impl Song {
         let mut row = Row::new().height(ART_ROW_H);
         let this = &ui.state.songs[id];
 
-        for i in 0..this.imgs.len() {
-            row = row.push(Self::image_box(ui, id, i));
+        for i in this.img_groups.flat() {
+            row = row.push(Self::image_box(ui, id, *i));
         }
 
         if this.imgs.is_empty() {

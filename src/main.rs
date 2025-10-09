@@ -4,22 +4,13 @@ mod api;
 mod app;
 mod parser;
 
-use std::io::Cursor;
-
 use app::iced_app::CoverUI;
 use flexi_logger::{Duplicate::Info, FileSpec, LogSpecification, Logger};
-use iced::{Preset, Size};
-use image::{ImageFormat, ImageReader, codecs::jpeg::JpegDecoder};
-use log::Log;
-use reqwest::Client;
+use iced::Size;
 use serde::Deserialize;
 pub type ImgHandle = iced::widget::image::Handle;
 pub type TaskHandle = iced::task::Handle;
 
-#[derive(Deserialize)]
-struct PossibleRedirect {
-    pub url: String,
-}
 // TODO: uncovered: grandson - one step closer
 fn main() -> Result<(), anyhow::Error> {
     #[cfg(debug_assertions)]

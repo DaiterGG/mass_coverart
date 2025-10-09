@@ -16,7 +16,7 @@ use crate::{
     },
     app::{
         iced_app::Message,
-        song_img::{ImageProgress, ImgFormat, SongImg},
+        img::{ImageProgress, ImgFormat, SongImg},
     },
 };
 

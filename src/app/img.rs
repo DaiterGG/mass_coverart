@@ -4,7 +4,7 @@ use image::{DynamicImage, ImageBuffer, ImageFormat, Luma};
 use log::{info, warn};
 use rand::{RngCore, rng};
 
-use crate::{ImgHandle, api::queue::Source};
+use crate::{ImgHandle, api::queue::Source, app::img_group::ImgGroups};
 
 use std::{io::Cursor, sync::Arc, time::Instant};
 
@@ -16,8 +16,6 @@ use image::{
 };
 use image_compare::{Algorithm::MSSIMSimple, gray_similarity_structure};
 use tokio::{sync::Semaphore, task::yield_now};
-
-use crate::{app::song::GroupSize, parser::file_parser::TagData};
 
 const THRESHOLD: f64 = 0.3;
 const SORT_LIMIT: usize = 15;
@@ -216,7 +214,7 @@ impl SongImg {
     }
     pub fn push_and_group(
         mut self,
-        groups: &mut Vec<GroupSize>,
+        groups: &mut ImgGroups,
         all: &mut Vec<SongImg>,
     ) -> Result<(), Error> {
         if self.sample.is_none() {
@@ -225,80 +223,24 @@ impl SongImg {
         }
         let b = self.sample.unwrap();
 
-        // iterate over first element of each group
-        let mut end_of_groups = 0;
-        let mut group = 0;
-        let mut i = 0;
-        while i < all.len() {
-            // limit sorting time, more groups - reach limit faster
-            if i > SORT_LIMIT {
-                self.sample = Some(b);
-                all.push(self);
-                return Ok(());
+        for group_i in 0..groups.len() {
+            if group_i > SORT_LIMIT {
+                break;
             }
-            if let Some(a) = all[i].sample.as_ref() {
+            if let Some(a) = all[groups.first_in_group(group_i)].sample.as_ref() {
                 let score = gray_similarity_structure(&MSSIMSimple, a, &b)?.score;
 
                 if score > THRESHOLD {
-                    break;
+                    groups.add_to_group(group_i, all.len(), 1);
+                    self.sample = Some(b);
+                    all.push(self);
+                    return Ok(());
                 }
             }
-
-            if group < groups.len() {
-                i += groups[group] as usize;
-                end_of_groups += groups[group] as usize;
-                group += 1;
-            } else {
-                i += 1;
-            }
         }
+        groups.add_new(all.len(), 1);
         self.sample = Some(b);
-
-        // not found / empty
-        if i == all.len() {
-            all.push(self);
-            return Ok(());
-        }
-
-        let mut group_first_element = i;
-        // within existing group
-        if group < groups.len() {
-            // rearrange groups until sorted by group size
-            while group > 0 && groups[group] + 1 > groups[group - 1] {
-                // swap each element
-                for group_i in 0..groups[group] as usize {
-                    all.swap(
-                        group_first_element + group_i,
-                        group_first_element + group_i - groups[group] as usize,
-                    );
-                }
-                // update to point to swapped group
-                group_first_element -= groups[group] as usize;
-                group -= 1;
-            }
-            let mut group_i = 0;
-            while group_i < groups[group] as usize
-                && all[group_first_element + group_i]
-                    .orig_res
-                    .unwrap_or_default()
-                    .1
-                    > self.orig_res.unwrap_or_default().1
-            {
-                group_i += 1;
-            }
-            groups[group] += 1;
-            all.insert(group_first_element + group_i, self);
-            return Ok(());
-        }
-        // form new group
-        all.swap(end_of_groups, group_first_element);
-        if all[end_of_groups].orig_res.unwrap_or_default().1 > self.orig_res.unwrap_or_default().1 {
-            all.insert(end_of_groups + 1, self);
-        } else {
-            all.insert(end_of_groups, self);
-        }
-        groups.push(2);
-
+        all.push(self);
         Ok(())
     }
 

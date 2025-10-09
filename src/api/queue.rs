@@ -14,8 +14,8 @@ use crate::{
     },
     app::{
         iced_app::Message,
+        img::SongImg,
         song::{SongHash, SongId},
-        song_img::SongImg,
     },
     parser::file_parser::TagData,
 };
