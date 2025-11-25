@@ -89,7 +89,6 @@ pub struct State {
 }
 pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
     if id >= st.songs.len()
-    // FIXME:
     || st.songs[id].hash != hash
     {
         error!("attempt to access invalid song {}", id);
