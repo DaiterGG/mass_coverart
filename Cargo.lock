@@ -2013,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "iced_core",
  "iced_debug",
@@ -2029,7 +2029,7 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "bitflags 2.10.0",
  "bytes",
@@ -2046,7 +2046,7 @@ dependencies = [
 [[package]]
 name = "iced_debug"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -2056,7 +2056,7 @@ dependencies = [
 [[package]]
 name = "iced_futures"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "futures",
  "iced_core",
@@ -2070,7 +2070,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "bitflags 2.10.0",
  "bytemuck",
@@ -2090,7 +2090,7 @@ dependencies = [
 [[package]]
 name = "iced_program"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "iced_graphics",
  "iced_runtime",
@@ -2099,7 +2099,7 @@ dependencies = [
 [[package]]
 name = "iced_renderer"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "iced_graphics",
  "iced_tiny_skia",
@@ -2111,7 +2111,7 @@ dependencies = [
 [[package]]
 name = "iced_runtime"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "bytes",
  "iced_core",
@@ -2123,7 +2123,7 @@ dependencies = [
 [[package]]
 name = "iced_tiny_skia"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "bytemuck",
  "cosmic-text",
@@ -2139,7 +2139,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "bitflags 2.10.0",
  "bytemuck",
@@ -2158,7 +2158,7 @@ dependencies = [
 [[package]]
 name = "iced_widget"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "iced_renderer",
  "log",
@@ -2171,7 +2171,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.14.0-dev"
-source = "git+file:///mnt/d/desk/mass_coverart/iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
+source = "git+file:///iced?branch=master#645643bfd63ed4c01aa281f97992e3c276e71498"
 dependencies = [
  "iced_debug",
  "iced_program",
