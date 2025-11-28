@@ -6,11 +6,11 @@ use iced::{
     Length::{Fill, FillPortion},
     alignment::Horizontal::{self},
     widget::{
-        column, container,
+        self, column, container,
         image::Viewer,
         row,
         scrollable::{Direction, Scrollbar},
-        space,
+        space, toggler,
     },
 };
 use log::info;
@@ -131,7 +131,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 .align_x(Horizontal::Center)
                 .line_height(0.48)
                 .color(theme.extended_palette().secondary.base.color),
-            text("-")
+            text("")
                 .size(65)
                 .width(BTN_SIZE)
                 .height(45)
@@ -201,10 +201,10 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         .spacing(10),
         row![
             h2("start auto process"),
-            checkbox("", ui.state.auto_mod)
+            toggler(ui.state.auto_mod)
                 .on_toggle(AutoModToggle)
                 .size(BTN_SIZE)
-                .style(check_st),
+                .style(toggler_st),
         ]
         .spacing(10),
     ]

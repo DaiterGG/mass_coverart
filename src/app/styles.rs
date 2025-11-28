@@ -9,7 +9,7 @@ use iced::{
         checkbox::{self},
         container,
         scrollable::{self, Rail, Scroller},
-        text_input,
+        text_input, toggler,
     },
 };
 
@@ -89,6 +89,39 @@ pub fn button_st(theme: &Theme, status: button::Status) -> button::Style {
         },
         text_color: palette.background.base.text,
         ..button::Style::default()
+    }
+}
+pub fn toggler_st(theme: &Theme, status: toggler::Status) -> toggler::Style {
+    let palette = theme.extended_palette();
+
+    let border = match status {
+        // toggler::Status::Hovered { is_toggled } if is_toggled => palette.secondary.base.color,
+        // toggler::Status::Hovered { is_toggled } if !is_toggled => palette.secondary.base.color,
+        toggler::Status::Active { is_toggled } if is_toggled => palette.secondary.base.color,
+        toggler::Status::Active { is_toggled } if !is_toggled => palette.danger.base.color,
+        _ => palette.secondary.base.color,
+    };
+    let nob = match status {
+        toggler::Status::Hovered { is_toggled } if is_toggled => palette.background.base.color,
+        toggler::Status::Hovered { is_toggled } if !is_toggled => palette.background.weak.color,
+        toggler::Status::Active { is_toggled } if is_toggled => palette.background.base.color,
+        toggler::Status::Active { is_toggled } if !is_toggled => palette.background.weak.color,
+        _ => palette.secondary.base.color,
+    };
+    let bg = match status {
+        toggler::Status::Hovered { is_toggled } if is_toggled => palette.secondary.base.color,
+        toggler::Status::Hovered { is_toggled } if !is_toggled => palette.background.base.color,
+        toggler::Status::Active { is_toggled } if is_toggled => palette.secondary.base.color,
+        toggler::Status::Active { is_toggled } if !is_toggled => palette.background.base.color,
+        _ => palette.secondary.base.color,
+    };
+    toggler::Style {
+        background: bg,
+        background_border_width: 1.0,
+        background_border_color: border,
+        foreground: nob,
+        foreground_border_width: 2.5,
+        foreground_border_color: bg,
     }
 }
 pub fn check_st(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
