@@ -6,7 +6,7 @@
 
 Cross-platform desktop app for downloading and inserting album art and other tags into audio files
 
-<img src="resources/preview.jpg" width="500px" />
+<img src="resources/preview.gif" width="500px" />
 
 </div>
 
