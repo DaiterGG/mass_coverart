@@ -66,6 +66,7 @@ async fn with_query(
     src: Source,
     b_client: &MusicBrainzClient,
 ) -> Result<(), Error> {
+    // TODO: rate limit throws internal crate error
     let query_result = Release::search(query.to_string())
         .execute_with_client(b_client)
         .await?;

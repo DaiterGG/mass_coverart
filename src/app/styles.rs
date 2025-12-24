@@ -13,6 +13,8 @@ use iced::{
     },
 };
 
+use crate::app::tags::TagType;
+
 pub fn miasma_theme() -> Theme {
     let primary = Color::from_rgb8(120, 130, 74);
     let secondary = Color::from_rgb8(187, 119, 68);
@@ -414,5 +416,46 @@ pub fn item_cont_st(theme: &Theme) -> container::Style {
             color: palette.background.weak.color,
         },
         ..container::Style::default()
+    }
+}
+pub fn tag_st(
+    theme: &Theme,
+    status: button::Status,
+    tag_type: TagType,
+    selected: bool,
+) -> button::Style {
+    let palette = theme.extended_palette();
+
+    let text_color = if selected {
+        palette.background.base.color
+    } else {
+        palette.background.base.text
+    };
+    let background = if !selected {
+        palette.background.base.color
+    } else {
+        match tag_type {
+            TagType::Album => palette.primary.base.color,
+            TagType::Title => palette.success.base.color,
+            TagType::Artist => palette.secondary.base.color,
+            _ => panic!(),
+        }
+    };
+    let background = Some(background.into());
+    let color = match tag_type {
+        TagType::Album => palette.primary.base.color,
+        TagType::Title => palette.success.base.color,
+        TagType::Artist => palette.secondary.base.color,
+        _ => panic!(),
+    };
+    button::Style {
+        text_color,
+        background,
+        border: Border {
+            width: 1.0,
+            radius: 100.0.into(),
+            color,
+        },
+        ..button::Style::default()
     }
 }

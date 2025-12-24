@@ -18,7 +18,7 @@ Cross-platform desktop app for downloading and inserting album art and other tag
 * Format and insert image into files or (TODO) download them in your library
 * Support for various file formats: .mp3, .flac, .mp4, .m4a, .m4p, .m4b, .m4r, .m4v
 * Sources supported: 
-  * Scrapers: youtube, yotube.music, bandcamp
+  * Scrapers: youtube, youtube.music, bandcamp
   * Official API: musicbrainz
 
 ## Feedback
@@ -28,6 +28,8 @@ If you have a suggestion open an issue or write me on discord: \_daiter\_
 ## Similar apps
 * [Mp3tag](https://www.mp3tag.de)
 * [AlbumArt](https://sourceforge.net/p/album-art)
+* [MBPickcard](https://picard.musicbrainz.org/)
+
 
 ## Implementation details
 * Written in Rust and using Iced GUI

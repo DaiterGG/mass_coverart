@@ -21,9 +21,10 @@ use crate::{
         img::{ImageProgress, ImageSettings, ImgFormat, ImgHash, ImgId, SongImg},
         song::{OrigArt, Song, SongHash, SongId, SongState},
         styles::*,
+        tags::{self, Tag, TagType, Tags},
         view::{PreviewState, REGEX_LIM, view},
     },
-    parser::file_parser::{ParseSettings, RegexType, apply_selected, get_tags_data},
+    parser::file_parser::{self, ParseSettings, RegexType, apply_selected, get_tags_data},
 };
 #[derive(Clone)]
 pub enum Message {
@@ -66,6 +67,7 @@ pub enum Message {
     ImgPreviewSet(PreviewState),
     DecodePreview(Bytes, ImgFormat, SongId, ImgId),
     ImgMenuToggle(bool, SongId, ImgHash),
+    TagToggle(SongId, usize),
     LoadOrigImg(SongId),
     SetOrigImg(ImgHandle, SongId, SongHash),
     Start,
@@ -88,9 +90,7 @@ pub struct State {
     pub img_settings: ImageSettings,
 }
 pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
-    if id >= st.songs.len()
-    || st.songs[id].hash != hash
-    {
+    if id >= st.songs.len() || st.songs[id].hash != hash {
         error!("attempt to access invalid song {}", id);
         true
     } else {
@@ -133,7 +133,9 @@ impl CoverUI {
             Start => {
                 #[cfg(debug_assertions)]
                 return Task::done(GotPath(vec![
-                    PathBuf::new().join("D:\\desk\\mass_coverart\\foo\\").into(),
+                    PathBuf::new()
+                        .join("D:\\desk\\mass_coverart\\foo\\sub\\")
+                        .into(),
                 ]))
                 .chain(Task::done(AfterStart));
             }
@@ -254,7 +256,6 @@ impl CoverUI {
                     return Task::done(ImgPreview(song_i, img_id));
                 }
             }
-
             DecodePreview(bytes, format, song_id, img_id) => {
                 self.state.preview_img = PreviewState::Loading;
                 let res = self.state.songs[song_id].imgs[img_id].preview_to_decoded(bytes, format);
@@ -283,6 +284,12 @@ impl CoverUI {
             }
             ApplySelectedPressed(song_id) => {
                 let song = &mut self.state.songs[song_id];
+
+                if let Err(e) = song.selected_tags.apply_selected(&mut song.tag_data) {
+                    error!("{}", e);
+                    return Task::done(DiscardSong(song_id));
+                }
+
                 let selected_img_hash = song.selected_img;
                 let mut selected_img_id = None;
                 for i in 0..song.imgs.len() {
@@ -309,6 +316,8 @@ impl CoverUI {
                         Task::done(ApplySelected(song_id))
                     };
                     return task.chain(Task::done(AutoModTrigger));
+                } else {
+                    return Task::done(GoBack(song_id));
                 }
             }
 
@@ -343,7 +352,7 @@ impl CoverUI {
                 }
             }
             ApplySelected(song_id) => {
-                if let Err(e) = apply_selected(self, song_id) {
+                if let Err(e) = file_parser::apply_selected(self, song_id) {
                     error!("{}", e);
                     return Task::done(DiscardSong(song_id));
                 }
@@ -351,14 +360,15 @@ impl CoverUI {
             }
             ConfirmSongIfNot(id) => {
                 if self.state.songs.len() > id && self.state.songs[id].state == SongState::Confirm {
-                    let info = TagsInput::from_data(
-                        id,
-                        self.state.songs[id].hash,
-                        &self.state.songs[id].tag_data,
-                    );
-                    self.state.songs[id].state = SongState::Main;
+                    let song = &mut self.state.songs[id];
+                    let info = TagsInput::from_data(id, song.hash, &song.tag_data);
+                    song.state = SongState::Main;
                     let (q, handle) = Queue::init(info);
-                    self.state.songs[id].queue_handle = Some(handle);
+                    song.queue_handle = Some(handle);
+
+                    song.new_tags
+                        .extend(file_parser::find_edited_tags(&song.tag_data));
+                    song.new_tags.extend(song.tags_from_regex.clone());
                     return q;
                 }
             }
@@ -367,11 +377,7 @@ impl CoverUI {
             GoBack(id) => {
                 self.state.songs[id].state = SongState::Confirm;
 
-                self.state.songs[id].queue_handle.take().unwrap().abort();
-                self.state.songs[id].imgs.clear();
-                self.state.songs[id].img_groups.clear();
-                self.state.songs[id].menu_close();
-                self.state.songs[id].unselect();
+                self.state.songs[id].reset();
                 return Task::done(AutoModTrigger);
             }
             DiscardSong(id) => {
@@ -528,6 +534,11 @@ impl CoverUI {
                 if !song_is_invalid(&self.state, id, hash) {
                     self.state.songs[id].original_art = Some(OrigArt::Loaded(handle));
                 }
+            }
+            TagToggle(id, tag_iter) => {
+                let song = &mut self.state.songs[id];
+                let tag = &mut song.new_tags.sorted[tag_iter];
+                song.selected_tags.toggle(tag.key, Some(tag.value.clone()));
             }
             _ => {
                 error!("unhandled message");

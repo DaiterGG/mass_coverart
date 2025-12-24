@@ -9,12 +9,12 @@ use std::{
     time::Instant,
 };
 
-use audiotags::{AudioTag, Picture, Tag};
-use thiserror::Error;
+use audiotags::{AudioTag, Picture};
 
 use crate::app::{
     iced_app::CoverUI,
     song::{OrigArt, Song, SongId},
+    tags::{Tag, TagType, Tags, USER_INPUT_TAG_SCORE},
 };
 
 #[derive(Clone, Debug)]
@@ -42,19 +42,49 @@ impl RegexType {
             Self::None => Self::Album,
         }
     }
-    fn reg_to_settings(&self, entry: &str, data: &mut TagData) {
+    fn reg_to_tags(&self, entry: &str, data: &mut TagData) -> Option<Tag> {
         match self {
             Self::Album => {
+                if let Some(e) = &data.album
+                    && entry == e
+                {
+                    return None;
+                };
                 data.album.get_or_insert(entry.to_string());
+                Some(Tag {
+                    value: entry.to_string(),
+                    score: USER_INPUT_TAG_SCORE,
+                    key: TagType::Album,
+                })
             }
             Self::Title => {
+                if let Some(e) = &data.title
+                    && entry == e
+                {
+                    return None;
+                };
                 data.title.get_or_insert(entry.to_string());
+                Some(Tag {
+                    value: entry.to_string(),
+                    score: USER_INPUT_TAG_SCORE,
+                    key: TagType::Title,
+                })
             }
             Self::Artist => {
+                if let Some(e) = &data.artist
+                    && entry == e
+                {
+                    return None;
+                };
                 data.artist.get_or_insert(entry.to_string());
+                Some(Tag {
+                    value: entry.to_string(),
+                    score: USER_INPUT_TAG_SCORE,
+                    key: TagType::Artist,
+                })
             }
-            Self::None => {}
-        };
+            Self::None => None,
+        }
     }
 }
 
@@ -119,26 +149,42 @@ pub async fn get_tags_data(
     }
     Ok(ret)
 }
+fn map_tag(src: Option<&str>) -> Option<String> {
+    if let Some(s) = src {
+        if s == "" { None } else { Some(s.to_string()) }
+    } else {
+        None
+    }
+}
+
 pub fn parse_tags(song: &mut Song, set: &ParseSettings) {
-    let data = &mut song.tag_data;
-    data.artist = data.file.artist().map(|s| s.to_string());
-    data.title = data.file.title().map(|s| s.to_string());
-    data.album = data.file.album_title().map(|s| s.to_string());
+    let tags = &mut song.tag_data;
+    tags.artist = map_tag(tags.file.artist());
+    tags.title = map_tag(tags.file.title());
+    tags.album = map_tag(tags.file.album_title());
     if !set.parse_file_name {
         return;
     }
-    let mut remaider = data.path.file_stem().unwrap().to_string_lossy().to_string();
+    let mut remaider = tags.path.file_stem().unwrap().to_string_lossy().to_string();
     for i in 0..set.reg_separators.len() {
         let sep = &set.reg_separators[i];
         if let Some((entry, rest)) = remaider.split_once(sep) {
-            set.reg_keys[i].reg_to_settings(entry, data);
+            let new_tag = set.reg_keys[i].reg_to_tags(entry, tags);
+            if let Some(t) = new_tag {
+                song.tags_from_regex.push(t);
+            }
             remaider = rest.to_string();
         }
     }
-    set.reg_keys
+    let new_tag = set
+        .reg_keys
         .last()
-        .unwrap()
-        .reg_to_settings(&remaider, data);
+        .expect("at least one regex")
+        .reg_to_tags(&remaider, tags);
+
+    if let Some(t) = new_tag {
+        song.tags_from_regex.push(t);
+    }
 }
 pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<Song>, Error> {
     let mut all_files = Vec::new();
@@ -171,7 +217,7 @@ pub fn parse_path(path: PathBuf, rec: bool) -> Result<Vec<Song>, Error> {
     Ok(all_files)
 }
 pub fn parse_file(path: PathBuf) -> Result<Song, Error> {
-    let file = Tag::new().read_from_path(&path)?;
+    let file = audiotags::Tag::new().read_from_path(&path)?;
     Ok(Song::new(TagData::new(path, file)))
 }
 pub fn is_rtl(s: &str) -> bool {
@@ -208,4 +254,33 @@ pub fn apply_selected(ui: &mut CoverUI, id: SongId) -> Result<(), Error> {
         tags.write_to_path(song.tag_data.path.to_str().unwrap())?;
     }
     Ok(())
+}
+pub fn find_edited_tags(tag_data: &TagData) -> Vec<Tag> {
+    let title = map_tag(tag_data.file.title());
+    let artist = map_tag(tag_data.file.artist());
+    let album = map_tag(tag_data.file.album_title());
+
+    let mut tags = Vec::new();
+    if tag_data.title != title {
+        tags.push(Tag {
+            key: TagType::Title,
+            value: tag_data.title.clone().unwrap_or_default(),
+            score: USER_INPUT_TAG_SCORE,
+        });
+    }
+    if tag_data.artist != artist {
+        tags.push(Tag {
+            key: TagType::Artist,
+            value: tag_data.artist.clone().unwrap_or_default(),
+            score: USER_INPUT_TAG_SCORE,
+        });
+    }
+    if tag_data.album != album {
+        tags.push(Tag {
+            key: TagType::Album,
+            value: tag_data.album.clone().unwrap_or_default(),
+            score: USER_INPUT_TAG_SCORE,
+        });
+    }
+    tags
 }

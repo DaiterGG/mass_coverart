@@ -30,6 +30,7 @@ impl ImgGroups {
     }
     pub fn clear(&mut self) {
         self.groups.clear();
+        self.flat.clear();
     }
     pub fn add_to_group(&mut self, group_id: usize, img_id: usize, img_weight: i32) {
         self.groups[group_id].weight += img_weight;

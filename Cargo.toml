@@ -1,6 +1,6 @@
 [package]
 name = "mass_coverart"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 authors = ["Daiter"]
 
@@ -18,7 +18,7 @@ image = "0.25.8"
 image-compare = "0.5.0"
 json = "0.12.4"
 log = "0.4.28"
-musicbrainz_rs = { version=  "0.12.0", features = ["rate_limit"] }
+musicbrainz_rs = {git="https://github.com/RustyNova016/musicbrainz_rs", branch = "dependabot/cargo/main/lucene_query_builder-tw-0.4.0", features = ["rate_limit"] }
 rand = "0.9.2"
 regex = "1.11.3"
 reqwest = { version = "0.12.23", features = ["json"] }
