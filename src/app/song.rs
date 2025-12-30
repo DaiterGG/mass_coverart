@@ -541,6 +541,12 @@ impl Song {
         let mut row = Row::new().height(ART_ROW_H).spacing(TAG_SPACING);
         let this = &ui.state.songs[id];
 
+        if this.new_tags.sorted.is_empty() {
+            row = row.push(
+                container(text("Not found").center().size(28).height(Fill).width(150))
+                    .style(filler_st),
+            );
+        }
         for i in 0..this.new_tags.sorted.len() {
             row = row.push(Self::tag(ui, id, i));
         }

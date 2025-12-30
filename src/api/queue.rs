@@ -92,12 +92,11 @@ impl Queue {
             tx.clone(),
         )
         .await;
-        let logs = set.join_all().await;
-        info!("queue is joined for {}", tags.id);
 
-        for log in logs {
-            let _ = log.inspect_err(|e| warn!("error occurred in queue of {} - {e}", tags.id));
+        while let Some(res) = set.join_next().await {
+            let _ = res.inspect_err(|e| warn!("error occurred in queue of {} - {e}", tags.id));
         }
+        info!("queue is joined for {}", tags.id);
         send_message(
             &tags,
             QueueMessage::SetSources(Self::TOTAL_SOURCES, Self::TOTAL_SOURCES),

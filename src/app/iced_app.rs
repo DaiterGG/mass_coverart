@@ -551,14 +551,9 @@ impl CoverUI {
             Event::Window(window::Event::FileDropped(path)) => {
                 Some(Message::PathDropped(vec![path.into()]))
             }
+            #[cfg(debug_assertions)]
             Event::Keyboard(KeyReleased {
-                #[cfg(debug_assertions)]
-                    key: Key::Named(Named::Escape),
-                ..
-            })
-            | Event::Keyboard(KeyReleased {
-                key: Key::Named(Named::F4),
-                modifiers: Modifiers::ALT,
+                key: Key::Named(Named::Escape),
                 ..
             }) => Some(Message::Exit),
             _ => None,

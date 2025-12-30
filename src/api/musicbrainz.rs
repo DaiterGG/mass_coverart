@@ -1,4 +1,4 @@
-use anyhow::{Error, bail};
+use anyhow::Error;
 use iced::futures::channel::mpsc::Sender;
 use log::{info, warn};
 use musicbrainz_rs::{

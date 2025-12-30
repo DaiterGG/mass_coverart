@@ -21,8 +21,6 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     let lvl = LogSpecification::info();
-    #[cfg(debug_assertions)]
-    let lvl = LogSpecification::info();
     Logger::with(lvl)
         .log_to_file(
             FileSpec::default()
