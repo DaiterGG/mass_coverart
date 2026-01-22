@@ -29,7 +29,7 @@ If you have a suggestion open an issue or write me on discord: \_daiter\_
 * [Mp3tag](https://www.mp3tag.de)
 * [AlbumArt](https://sourceforge.net/p/album-art)
 * [MBPickcard](https://picard.musicbrainz.org/)
-
+* [RustyCOV](https://github.com/UnknownSuperficialNight/RustyCOV)
 
 ## Implementation details
 * Written in Rust and using Iced GUI
