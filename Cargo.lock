@@ -2663,18 +2663,18 @@ checksum = "96051b46fc183dc9cd4a223960ef37b9af631b55191852a8274bfef064cda20f"
 
 [[package]]
 name = "lucene_query_builder"
-version = "0.4.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bef2a829731f3ff5bc5534d4975a0f1eb1399d04fb41af5f6e829ed7dd2a2ef"
+checksum = "06a250d084897852aa59e2be2aa5684eee4adf71b03488fa578abc2d5be8721c"
 dependencies = [
  "lucene_query_builder_rs_derive",
 ]
 
 [[package]]
 name = "lucene_query_builder_rs_derive"
-version = "0.4.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7c33cd74a8681a2ce0746a8bbf366d2117bd86609529cbf2ed5a93f31221021"
+checksum = "97eabbb248dbc18c187c5ce1de50a479a835e8352a7f1506f4b321ccfd19d3e6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2723,7 +2723,7 @@ dependencies = [
 
 [[package]]
 name = "mass_coverart"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "any",
  "anyhow",
@@ -2920,7 +2920,7 @@ dependencies = [
 [[package]]
 name = "musicbrainz_rs"
 version = "0.12.0"
-source = "git+https://github.com/RustyNova016/musicbrainz_rs?branch=dependabot%2Fcargo%2Fmain%2Flucene_query_builder-tw-0.4.0#6fbc2624be9a09e4e073e4fdd87d09de888aca91"
+source = "git+https://github.com/RustyNova016/musicbrainz_rs?branch=main#46efec196e56da52bf16c5f8eaecaa893ea85f54"
 dependencies = [
  "chrono",
  "glob",

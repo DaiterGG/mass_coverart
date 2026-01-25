@@ -108,9 +108,10 @@ async fn get_img(
     let url_patterns = vec![
         format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/hq720.jpg", link_id),
+        // reasoning for sd order https://img.youtube.com/vi/h9eyp6cHnwM/sd2.jpg
+        format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sd2.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sd3.jpg", link_id),
-        format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
     ];
     // mq can be in different aspect ratio that all other thumbnails versions for some reason
     // might pair it with sddefault since it also have different res

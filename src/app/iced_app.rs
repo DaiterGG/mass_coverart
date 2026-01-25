@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration, vec};
 use bytes::Bytes;
 use iced::{
     Element, Event, Subscription, Task, Theme, event, exit,
-    keyboard::{Event::KeyReleased, Key, Modifiers, key::Named},
+    keyboard::{Event::KeyReleased, Key, key::Named},
     window::{self, icon},
 };
 use log::{error, info, warn};
@@ -18,13 +18,12 @@ use crate::{
         shared,
     },
     app::{
-        img::{ImageProgress, ImageSettings, ImgFormat, ImgHash, ImgId, SongImg},
+        img::{ImageProgress, ImageSettings, ImgFormat, ImgId, SongImg},
         song::{OrigArt, Song, SongHash, SongId, SongState},
         styles::*,
-        tags::{self, Tag, TagType, Tags},
         view::{PreviewState, REGEX_LIM, view},
     },
-    parser::file_parser::{self, ParseSettings, RegexType, apply_selected, get_tags_data},
+    parser::file_parser::{self, ParseSettings, RegexType, get_tags_data},
 };
 #[derive(Clone)]
 pub enum Message {
@@ -61,15 +60,17 @@ pub enum Message {
     AutoModTrigger,
     ProcessedArt(SongId, SongHash, SongImg),
     Scroll(f32),
-    ImgSelect(SongId, ImgHash),
+    ImgSelect(SongId, ImgId),
     ImgPreviewOpen(SongId, ImgId),
     ImgPreview(SongId, ImgId),
     ImgPreviewSet(PreviewState),
     DecodePreview(Bytes, ImgFormat, SongId, ImgId),
-    ImgMenuToggle(bool, SongId, ImgHash),
+    ImgMenuToggle(bool, SongId, ImgId),
     TagToggle(SongId, usize),
     LoadOrigImg(SongId),
     SetOrigImg(ImgHandle, SongId, SongHash),
+    SaveImgLocallyStart(SongId, ImgHandle),
+    SaveImgLocallyEnd(Option<FileHandle>, ImgHandle),
     Start,
     AfterStart,
     Exit,
@@ -208,19 +209,19 @@ impl CoverUI {
                 return Task::done(GotPath(vec));
             }
 
-            ImgSelect(song_id, img_hash) => {
-                self.state.songs[song_id].selected_img = img_hash;
-                return Task::done(ImgMenuToggle(false, song_id, img_hash));
+            ImgSelect(song_id, img_id) => {
+                self.state.songs[song_id].selected_img = Some(img_id);
+                return Task::done(ImgMenuToggle(false, song_id, img_id));
             }
-            ImgMenuToggle(enter, song_id, img_hash) => {
+            ImgMenuToggle(enter, song_id, img_id) => {
                 if enter {
                     let now = self.state.songs[song_id].menu_img;
-                    if now != img_hash {
-                        self.state.songs[song_id].menu_img = img_hash;
+                    if now != Some(img_id) {
+                        self.state.songs[song_id].menu_img = Some(img_id);
                     }
                 } else {
                     let now = self.state.songs[song_id].menu_img;
-                    if now == img_hash {
+                    if now == Some(img_id) {
                         self.state.songs[song_id].menu_close();
                     }
                 }
@@ -272,7 +273,7 @@ impl CoverUI {
             ImgPreview(song_i, img_id) => {
                 let state = self.state.songs[song_i].imgs[img_id]
                     .final_img_preview(self.state.img_settings);
-                self.state.preview_img = PreviewState::Display(state);
+                self.state.preview_img = PreviewState::Display(state, song_i);
             }
             ImgPreviewSet(state) => {
                 if let PreviewState::Downloading(h) = &self.state.preview_img
@@ -290,15 +291,7 @@ impl CoverUI {
                     return Task::done(DiscardSong(song_id));
                 }
 
-                let selected_img_hash = song.selected_img;
-                let mut selected_img_id = None;
-                for i in 0..song.imgs.len() {
-                    if song.imgs[i].hash == selected_img_hash {
-                        selected_img_id = Some(i);
-                        break;
-                    }
-                }
-                if let Some(img_id) = selected_img_id {
+                if let Some(img_id) = song.selected_img {
                     let img = &mut song.imgs[img_id];
                     let task = if let ImageProgress::Preview(urls) = &img.image {
                         song.state = SongState::MainDownloading;
@@ -326,15 +319,8 @@ impl CoverUI {
             }
             DecodeAccept(bytes, format, song_id) => {
                 let song = &mut self.state.songs[song_id];
-                let selected_img_hash = song.selected_img;
-                let mut selected_img_id = None;
-                for i in 0..song.imgs.len() {
-                    if song.imgs[i].hash == selected_img_hash {
-                        selected_img_id = Some(i);
-                        break;
-                    }
-                }
-                if let Some(img_id) = selected_img_id {
+
+                if let Some(img_id) = song.selected_img {
                     self.state.songs[song_id].state = SongState::MainLoading;
                     let res =
                         self.state.songs[song_id].imgs[img_id].preview_to_decoded(bytes, format);
@@ -462,10 +448,12 @@ impl CoverUI {
                             let mut task = Task::none();
                             if self.state.songs[id].state == SongState::Main
                                 && !self.state.songs[id].imgs.is_empty()
-                                && self.state.songs[id].selected_img == 0
+                                && self.state.songs[id].selected_img.is_none()
                             {
-                                let hash = self.state.songs[id].imgs[0].hash;
-                                task = task.chain(Task::done(ImgSelect(id, hash)));
+                                let first_img_id =
+                                    self.state.songs[id].img_groups.first_in_group(0);
+                                self.state.songs[id].selected_img = Some(first_img_id);
+                                task = task.chain(Task::done(ImgSelect(id, 0)));
                             }
                             return task.chain(Task::done(AutoModTrigger));
                         }
@@ -539,6 +527,35 @@ impl CoverUI {
                 let song = &mut self.state.songs[id];
                 let tag = &mut song.new_tags.sorted[tag_iter];
                 song.selected_tags.toggle(tag.key, Some(tag.value.clone()));
+            }
+            SaveImgLocallyStart(id, h) => {
+                let song = self
+                    .state
+                    .songs
+                    .get_mut(id)
+                    .expect("song cannot be deselected when preview open");
+                let mut title = song
+                    .tag_data
+                    .path
+                    .file_name()
+                    .map_or("image".to_string(), |t| t.to_string_lossy().to_string());
+                title.push_str(".jpg");
+                let files = AsyncFileDialog::new()
+                    .set_title("foo")
+                    .set_file_name(title)
+                    .save_file();
+                return Task::perform(files, |d| SaveImgLocallyEnd(d, h));
+            }
+            SaveImgLocallyEnd(data, handle) => {
+                if let Some(path) = data {
+                    let ext = path.file_name().rsplit_once('.').map_or(".jpg", |p| p.1);
+
+                    // let rgba = match handle {
+                    //     Rgba
+                    // path.write(handle.);
+                    // handle.
+                    // DynamicImage::new_rgba8(w, h)
+                }
             }
             _ => {
                 error!("unhandled message");

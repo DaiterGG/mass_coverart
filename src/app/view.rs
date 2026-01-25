@@ -15,7 +15,10 @@ use iced::{
 };
 use log::info;
 
-use crate::{ImgHandle, app::iced_app::Message};
+use crate::{
+    ImgHandle,
+    app::{iced_app::Message, song::SongId, song_view},
+};
 use crate::{
     TaskHandle,
     app::{iced_app::CoverUI, song::Song, styles::*},
@@ -28,7 +31,7 @@ pub const REGEX_LIM: usize = 7;
 pub const TEXT_SIZE: f32 = 14.0;
 pub const H1_SIZE: f32 = 17.0;
 pub const INNER_TEXT_SIZE: f32 = 14.0;
-pub const BTN_SIZE: f32 = 25.0;
+pub const BTN_HEIGHT: f32 = 25.0;
 pub const HEADER_H: f32 = 200.0;
 
 #[derive(Clone, Debug, Default)]
@@ -37,7 +40,7 @@ pub enum PreviewState {
     Closed,
     Loading,
     Error,
-    Display(ImgHandle),
+    Display(ImgHandle, SongId),
     Downloading(TaskHandle),
 }
 
@@ -59,7 +62,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             .height(Fill)
             .wrapping(text::Wrapping::None)
     };
-    let btn = |s| button(h3(s).center()).clip(true).height(BTN_SIZE);
+    let btn = |s| button(h3(s).center()).clip(true).height(BTN_HEIGHT);
     let file_button = btn("file...")
         .width(50)
         .style(button_st)
@@ -71,7 +74,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             .on_press(FolderOpenStart),
         text("").width(10),
         checkbox("", ui.state.parse_settings.recursive)
-            .size(BTN_SIZE)
+            .size(BTN_HEIGHT)
             .on_toggle(|_| RecursiveToggle)
             .style(check_st),
         h2("recursive"),
@@ -83,7 +86,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             let elem = Element::from(container(
                 btn(set.reg_keys[i].to_str())
                     .width(60)
-                    .height(BTN_SIZE)
+                    .height(BTN_HEIGHT)
                     .style(button_st)
                     .on_press(FilterPressed(i)),
             ));
@@ -100,40 +103,40 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 regex = regex.push(elem);
             }
         }
-        regex = regex.spacing(5).height(BTN_SIZE);
+        regex = regex.spacing(5).height(BTN_HEIGHT);
 
         let add = stack![
-            text("").height(45).width(BTN_SIZE),
+            text("").height(45).width(BTN_HEIGHT),
             button("")
-                .width(BTN_SIZE)
-                .height(BTN_SIZE)
+                .width(BTN_HEIGHT)
+                .height(BTN_HEIGHT)
                 .style(add_remove)
                 .on_press(AddRegex),
             text("˖")
                 .size(45)
-                .width(BTN_SIZE)
+                .width(BTN_HEIGHT)
                 .height(45)
                 .align_x(Horizontal::Center)
                 .line_height(0.28)
                 .color(theme.extended_palette().secondary.base.color),
         ];
         let rem = stack![
-            text("").height(45).width(BTN_SIZE),
+            text("").height(45).width(BTN_HEIGHT),
             button("")
-                .width(BTN_SIZE)
-                .height(BTN_SIZE)
+                .width(BTN_HEIGHT)
+                .height(BTN_HEIGHT)
                 .style(add_remove)
                 .on_press(RemoveRegex),
             text("-")
                 .size(35)
-                .width(BTN_SIZE)
+                .width(BTN_HEIGHT)
                 .height(45)
                 .align_x(Horizontal::Center)
                 .line_height(0.48)
                 .color(theme.extended_palette().secondary.base.color),
             text("")
                 .size(65)
-                .width(BTN_SIZE)
+                .width(BTN_HEIGHT)
                 .height(45)
                 .align_x(Horizontal::Center)
                 .line_height(0.32)
@@ -158,7 +161,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         row![
             checkbox("", ui.state.parse_settings.parse_file_name)
                 .on_toggle(|_| ParseToggle)
-                .size(BTN_SIZE)
+                .size(BTN_HEIGHT)
                 .style(check_st),
             h2("parse file name"),
         ],
@@ -187,7 +190,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             h2("crop to square (width)"),
             checkbox("", ui.state.img_settings.square)
                 .on_toggle(|_| SquareToggle)
-                .size(BTN_SIZE)
+                .size(BTN_HEIGHT)
                 .style(check_st),
         ]
         .spacing(10),
@@ -195,7 +198,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             h2("convert to jpg"),
             checkbox("", ui.state.img_settings.jpg)
                 .on_toggle(|_| JpgToggle)
-                .size(BTN_SIZE)
+                .size(BTN_HEIGHT)
                 .style(check_st),
         ]
         .spacing(10),
@@ -203,7 +206,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             h2("start auto process"),
             toggler(ui.state.auto_mod)
                 .on_toggle(AutoModToggle)
-                .size(BTN_SIZE)
+                .size(BTN_HEIGHT)
                 .style(toggler_st),
         ]
         .spacing(10),
@@ -218,7 +221,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         settings_panel.width(Fill).height(Fill)
     ];
 
-    let list = Song::generate_view_list(ui);
+    let list = song_view::generate_view_list(ui);
     let list = scrollable(list)
         .direction(Direction::Vertical(
             Scrollbar::new().margin(0).scroller_width(15),
@@ -284,7 +287,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 row![
                     space().height(1).width(FillPortion(1)),
                     container(match &ui.state.preview_img {
-                        PreviewState::Display(h) =>
+                        PreviewState::Display(h, _) =>
                             container(Viewer::new(h).height(Fill).width(Fill)),
                         PreviewState::Error => container(
                             text("Error occurred")
@@ -315,6 +318,21 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                     .height(FillPortion(6)),
                     space().height(1).width(FillPortion(1)),
                 ],
+                match &ui.state.preview_img {
+                    PreviewState::Display(h, id) => {
+                        container(
+                            btn("save locally...")
+                                .width(110)
+                                .on_press(SaveImgLocallyStart(*id, h.clone()))
+                                .style(button_st),
+                        )
+                        .padding(10.0)
+                        .center_x(Fill)
+                    }
+                    _ => {
+                        container("").height(BTN_HEIGHT + 20.0)
+                    }
+                },
                 space().width(1).height(FillPortion(1)),
             ]
             .height(Fill)

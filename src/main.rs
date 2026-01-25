@@ -12,6 +12,9 @@ pub type ImgHandle = iced::widget::image::Handle;
 pub type TaskHandle = iced::task::Handle;
 
 // TODO: uncovered: grandson - one step closer
+// musicbrainz test and upgrade
+// add local image
+// save image locally (on the preview page
 fn main() -> Result<(), anyhow::Error> {
     #[cfg(debug_assertions)]
     unsafe {

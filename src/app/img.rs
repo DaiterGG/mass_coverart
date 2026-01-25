@@ -109,11 +109,9 @@ impl ImageProgress {
 }
 
 pub type ImgId = usize;
-pub type ImgHash = u64;
 #[derive(Clone, Debug)]
 /// * `orig_format`: format of the full image, preview image format will be guessed
 pub struct SongImg {
-    pub hash: ImgHash,
     pub orig_format: ImgFormat,
     pub src: Source,
     pub image: ImageProgress,
@@ -127,7 +125,6 @@ impl SongImg {
         Self {
             image,
             orig_format: format,
-            hash: rng().next_u64(),
             src,
             orig_res: None,
             preview: None,
@@ -274,7 +271,8 @@ impl SongImg {
 
         let (w, h) = scaled.dimensions();
 
-        let preview = scaled.to_rgba8();
+        let preview = scaled.thumbnail(PREVIEW_DIM * 2, PREVIEW_DIM);
+        let preview = preview.to_rgba8();
         let handle = ImgHandle::from_rgba(w, h, Bytes::from_owner(preview.into_raw()));
 
         let mut new_img = Vec::<u8>::new();

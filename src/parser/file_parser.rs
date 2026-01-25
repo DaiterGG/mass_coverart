@@ -232,15 +232,9 @@ pub fn is_rtl(s: &str) -> bool {
 }
 pub fn apply_selected(ui: &mut CoverUI, id: SongId) -> Result<(), Error> {
     let song = &mut ui.state.songs[id];
-    let selected_img_hash = song.selected_img;
-    let mut selected_img = None;
-    for img in &mut song.imgs {
-        if img.hash == selected_img_hash {
-            selected_img = Some(img);
-            break;
-        }
-    }
-    if let Some(img) = selected_img {
+
+    if let Some(img_id) = song.selected_img {
+        let img = &mut song.imgs[img_id];
         info!("final img {}", img.image.dbg());
         let (fin, fin_type, fin_prev) = img.final_img(&ui.state.img_settings);
         song.original_art = Some(OrigArt::Loaded(fin_prev));
