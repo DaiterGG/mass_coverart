@@ -1,6 +1,6 @@
 use crate::{
     app::{
-        iced_app::{CoverUI, Message},
+        iced_app::{song_is_invalid, CoverUI, Message},
         img::ImgId,
         song::{OrigArt, SongId, SongState},
         styles::{
@@ -9,7 +9,7 @@ use crate::{
         },
         view::{BTN_HEIGHT, INNER_TEXT_SIZE, TEXT_SIZE},
     },
-    parser::file_parser::is_rtl,
+    parser::file_parser::is_rtl, ImgHandle,
 };
 use iced::widget::image;
 use iced::widget::scrollable;
@@ -211,7 +211,7 @@ pub fn generate_list_item<'a>(
                             if let OrigArt::Loaded(art) = cover {
                                 row![
                                     space().width(INFO_COLUMN_GAP).height(1),
-                                    container(image(art))
+                                    orig_img(ui, id, art)
                                 ]
                             } else if *cover == OrigArt::Loading {
                                 row![]
@@ -471,6 +471,20 @@ fn tag<'a>(ui: &CoverUI, id: SongId, tag_iter: ImgId) -> Button<'a, Message> {
         .style(move |theme, status| tag_st(theme, status, key, selected))
         .on_press(Message::TagToggle(id, tag_iter))
         .height(TAG_H)
+}
+fn orig_img<'a>(ui: &CoverUI, id: SongId, art: &ImgHandle) -> MouseArea<'a, Message> {
+    let mut cont = container(image(art));
+    let hovered = ui.state.songs[id].original_art_hovered;
+    if hovered {
+        cont = container(stack![
+            cont,
+            container(text("delete").size(TEXT_SIZE)).style(image_hover_st).center(Fill),
+        ]);
+    }
+    mouse_area(cont)
+        .on_exit(Message::OrigImageHover(false, id))
+        .on_enter(Message::OrigImageHover(true, id))
+        .on_press(Message::RemoveImageFromFile(id))
 }
 
 fn limit_path(path_str: &mut String) {

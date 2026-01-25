@@ -71,6 +71,8 @@ pub enum Message {
     SetOrigImg(ImgHandle, SongId, SongHash),
     SaveImgLocallyStart(SongId, ImgId),
     SaveImgLocallyEnd(Option<FileHandle>,SongId, ImgId),
+    RemoveImageFromFile(SongId),
+    OrigImageHover(bool, SongId),
     Start,
     AfterStart,
     Exit,
@@ -554,6 +556,19 @@ impl CoverUI {
                 if let Some(file_handle) = data {
                     self.state.songs[song_id].imgs[img_id].decoded().save(file_handle.path()).unwrap();
                 }
+            }
+            RemoveImageFromFile(song_id) => {
+                let song = &mut self.state.songs[song_id];
+                song.tag_data.file.remove_album_cover();
+                let res = song.tag_data.file.write_to_path(song.tag_data.path.to_str().unwrap());
+                if let Err(e) = res {
+                    error!("{}",e);
+                    return Task::none();
+                }
+                song.original_art = None;
+            }
+            OrigImageHover(hovered, song_id) => {
+                self.state.songs[song_id].original_art_hovered = hovered;
             }
             _ => {
                 error!("unhandled message");
