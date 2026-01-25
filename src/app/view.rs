@@ -16,8 +16,7 @@ use iced::{
 use log::info;
 
 use crate::{
-    ImgHandle,
-    app::{iced_app::Message, song::SongId, song_view},
+    app::{iced_app::Message, img::ImgId, song::SongId, song_view}, ImgHandle
 };
 use crate::{
     TaskHandle,
@@ -40,7 +39,7 @@ pub enum PreviewState {
     Closed,
     Loading,
     Error,
-    Display(ImgHandle, SongId),
+    Display(ImgHandle, SongId, ImgId),
     Downloading(TaskHandle),
 }
 
@@ -287,7 +286,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                 row![
                     space().height(1).width(FillPortion(1)),
                     container(match &ui.state.preview_img {
-                        PreviewState::Display(h, _) =>
+                        PreviewState::Display(h, _, _) =>
                             container(Viewer::new(h).height(Fill).width(Fill)),
                         PreviewState::Error => container(
                             text("Error occurred")
@@ -319,11 +318,11 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                     space().height(1).width(FillPortion(1)),
                 ],
                 match &ui.state.preview_img {
-                    PreviewState::Display(h, id) => {
+                    PreviewState::Display(_, song_id, img_id) => {
                         container(
                             btn("save locally...")
                                 .width(110)
-                                .on_press(SaveImgLocallyStart(*id, h.clone()))
+                                .on_press(SaveImgLocallyStart(*song_id, *img_id))
                                 .style(button_st),
                         )
                         .padding(10.0)

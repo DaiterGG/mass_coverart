@@ -45,6 +45,12 @@ pub enum ImgFormat {
     Png,
 }
 impl ImgFormat {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Self::Png => ".png",
+            Self::Jpeg => ".jpg",
+        }
+    }
     pub fn imageio(&self) -> ImageFormat {
         match self {
             Self::Png => ImageFormat::Png,
@@ -269,9 +275,8 @@ impl SongImg {
     pub fn final_img(&mut self, set: &ImageSettings) -> (Bytes, ImgFormat, Handle) {
         let scaled = self.apply_settings(set);
 
-        let (w, h) = scaled.dimensions();
-
         let preview = scaled.thumbnail(PREVIEW_DIM * 2, PREVIEW_DIM);
+        let (w, h) = preview.dimensions();
         let preview = preview.to_rgba8();
         let handle = ImgHandle::from_rgba(w, h, Bytes::from_owner(preview.into_raw()));
 
@@ -294,7 +299,7 @@ impl SongImg {
         } else {
             raw
         };
-        let (w, h) = cropped.dimensions();
+        let (_, h) = cropped.dimensions();
 
         if set.downscale < h {
             cropped.resize(9999, set.downscale, Triangle)

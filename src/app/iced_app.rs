@@ -69,8 +69,8 @@ pub enum Message {
     TagToggle(SongId, usize),
     LoadOrigImg(SongId),
     SetOrigImg(ImgHandle, SongId, SongHash),
-    SaveImgLocallyStart(SongId, ImgHandle),
-    SaveImgLocallyEnd(Option<FileHandle>, ImgHandle),
+    SaveImgLocallyStart(SongId, ImgId),
+    SaveImgLocallyEnd(Option<FileHandle>,SongId, ImgId),
     Start,
     AfterStart,
     Exit,
@@ -270,10 +270,10 @@ impl CoverUI {
                 }
                 return Task::done(ImgPreview(song_id, img_id));
             }
-            ImgPreview(song_i, img_id) => {
-                let state = self.state.songs[song_i].imgs[img_id]
+            ImgPreview(song_id, img_id) => {
+                let state = self.state.songs[song_id].imgs[img_id]
                     .final_img_preview(self.state.img_settings);
-                self.state.preview_img = PreviewState::Display(state, song_i);
+                self.state.preview_img = PreviewState::Display(state, song_id, img_id);
             }
             ImgPreviewSet(state) => {
                 if let PreviewState::Downloading(h) = &self.state.preview_img
@@ -528,33 +528,31 @@ impl CoverUI {
                 let tag = &mut song.new_tags.sorted[tag_iter];
                 song.selected_tags.toggle(tag.key, Some(tag.value.clone()));
             }
-            SaveImgLocallyStart(id, h) => {
+            SaveImgLocallyStart(song_id, img_id) => {
                 let song = self
                     .state
                     .songs
-                    .get_mut(id)
+                    .get_mut(song_id)
                     .expect("song cannot be deselected when preview open");
                 let mut title = song
                     .tag_data
                     .path
                     .file_name()
-                    .map_or("image".to_string(), |t| t.to_string_lossy().to_string());
-                title.push_str(".jpg");
+                    .map_or("image".to_string(),
+                        |t| t.to_string_lossy().to_string().rsplit_once('.').expect("music file has extension").0.to_string()
+                    );
+                let ext = self.state.songs[song_id].imgs[img_id].orig_format.to_str();
+                title.push_str(ext);
                 let files = AsyncFileDialog::new()
-                    .set_title("foo")
+                    .set_title("save image")
                     .set_file_name(title)
+                    .add_filter(ext, &[ext])
                     .save_file();
-                return Task::perform(files, |d| SaveImgLocallyEnd(d, h));
+                return Task::perform(files, move |d| SaveImgLocallyEnd(d, song_id, img_id));
             }
-            SaveImgLocallyEnd(data, handle) => {
-                if let Some(path) = data {
-                    let ext = path.file_name().rsplit_once('.').map_or(".jpg", |p| p.1);
-
-                    // let rgba = match handle {
-                    //     Rgba
-                    // path.write(handle.);
-                    // handle.
-                    // DynamicImage::new_rgba8(w, h)
+            SaveImgLocallyEnd(data, song_id, img_id) => {
+                if let Some(file_handle) = data {
+                    self.state.songs[song_id].imgs[img_id].decoded().save(file_handle.path()).unwrap();
                 }
             }
             _ => {
