@@ -90,25 +90,25 @@ async fn with_query(
             .execute_with_client(b_client)
             .await;
 
-        let client = b_client.get_reqwest_client();
+        let client = &b_client.reqwest_client;
         if let Ok(cover_response) = releases_result
             && let CoverartResponse::Json(cover) = cover_response
         {
             for img in cover.images {
                 let new_song = if let Some(thumb) = img.thumbnails.res_250 {
-                    let res = shared::get_img(client.clone(), vec![thumb]).await;
+                    let res = shared::get_img(client, vec![thumb]).await;
                     if res.is_err() {
                         continue;
                     }
                     RawPreview(vec![img.image.clone()], res.unwrap())
                 } else if let Some(thumb) = img.thumbnails.small {
-                    let res = shared::get_img(client.clone(), vec![thumb]).await;
+                    let res = shared::get_img(client, vec![thumb]).await;
                     if res.is_err() {
                         continue;
                     }
                     RawPreview(vec![img.image.clone()], res.unwrap())
                 } else {
-                    let res = shared::get_img(client.clone(), vec![img.image.clone()]).await;
+                    let res = shared::get_img(client, vec![img.image.clone()]).await;
                     if res.is_err() {
                         continue;
                     }

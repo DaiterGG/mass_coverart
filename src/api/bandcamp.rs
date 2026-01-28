@@ -145,8 +145,7 @@ async fn fetch_and_send_artwork(
 ) -> Result<(), Error> {
     info!("Attempting to fetch bandcamp artwork from: {}", full_url);
 
-    let image_data =
-        shared::get_img(client.clone(), vec![thumb_url.clone(), full_url.clone()]).await?;
+    let image_data = shared::get_img(&client, vec![thumb_url.clone(), full_url.clone()]).await?;
 
     let song_img = SongImg::new(
         ImgFormat::Jpeg,

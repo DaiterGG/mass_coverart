@@ -10,7 +10,7 @@ use crate::{
     app::{iced_app::Message, img::SongImg},
 };
 
-pub async fn get_img(client: Client, urls: Vec<String>) -> Result<Bytes, Error> {
+pub async fn get_img(client: &Client, urls: Vec<String>) -> Result<Bytes, Error> {
     let mut last_error = None;
     for url in &urls {
         info!("Trying to get img: {}", url);

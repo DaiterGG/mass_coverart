@@ -118,7 +118,7 @@ async fn get_img(
     let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
     // let small_url = format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id);
 
-    let pic = shared::get_img(client, vec![small_url])
+    let pic = shared::get_img(&client, vec![small_url])
         .await
         .inspect_err(|e| {
             warn!("image could not download {link_id}, {e}");

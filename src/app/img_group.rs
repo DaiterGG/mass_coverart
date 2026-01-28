@@ -36,13 +36,7 @@ impl ImgGroups {
         self.groups[group_id].weight += img_weight;
         self.groups[group_id].imgs.push(img_id);
 
-        let mut move_id = group_id;
-        while move_id > 0 && self.groups[move_id - 1].weight < self.groups[group_id].weight {
-            move_id -= 1;
-        }
-        if group_id != move_id {
-            self.groups.swap(group_id, move_id);
-        }
+        self.sort_groups(group_id);
         self.update_flat();
     }
     pub fn add_new(&mut self, img_id: usize, img_weight: i32) {
@@ -50,7 +44,9 @@ impl ImgGroups {
             weight: img_weight,
             imgs: vec![img_id],
         });
-        self.flat.push(img_id);
+
+        self.sort_groups(self.groups.len() - 1);
+        self.update_flat();
     }
     /// update flat copy after adding 1 element
     fn update_flat(&mut self) {
@@ -61,6 +57,15 @@ impl ImgGroups {
                 self.flat[flat_i] = *i;
                 flat_i += 1;
             }
+        }
+    }
+    fn sort_groups(&mut self, group_id: usize) {
+        let mut move_id = group_id;
+        while move_id > 0 && self.groups[move_id - 1].weight < self.groups[group_id].weight {
+            move_id -= 1;
+        }
+        if group_id != move_id {
+            self.groups.swap(group_id, move_id);
         }
     }
 }

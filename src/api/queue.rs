@@ -22,6 +22,7 @@ use crate::{
 
 #[derive(Clone, Copy, Debug)]
 pub enum Source {
+    LocalFile,
     YoutubeAlbum,
     YoutubeTitle,
     BrainzAlbum,
@@ -31,9 +32,23 @@ pub enum Source {
     YoutubeMusicAlbum,
     YoutubeMusicTitle,
 }
+impl Source {
+    pub fn get_weight(&self) -> i32 {
+        match self {
+            // Local files always on top
+            Self::LocalFile => 9999,
+            Self::BrainzTitle => 30,
+            Self::BrainzAlbum => 30,
+            Self::BandcampAlbum => 15,
+            Self::BandcampTitle => 15,
+            _ => 10,
+        }
+    }
+}
 impl Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::LocalFile => write!(f, "local file"),
             Self::YoutubeAlbum => write!(f, "youtube.com (%artist% %album% album)"),
             Self::YoutubeTitle => write!(f, "youtube.com (%artist% %title% audio)"),
             Self::BrainzAlbum => write!(f, "musicbrainz.com (%artist% %album%)"),

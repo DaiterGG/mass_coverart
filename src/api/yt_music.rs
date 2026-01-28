@@ -1,13 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{Error, bail};
+use anyhow::Error;
 use iced::futures::channel::mpsc::Sender;
-use log::{info, trace, warn};
-use regex::{Captures, Regex};
+use log::{info, warn};
+use regex::Regex;
 use reqwest::Client;
-use serde_json::to_string;
 use tokio::time::Instant;
-use yt_search::{SearchFilters, YouTubeSearch};
 
 use crate::{
     api::{
@@ -142,7 +140,7 @@ async fn get_img(
     ];
     let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
 
-    let pic = shared::get_img(client, vec![small_url])
+    let pic = shared::get_img(&client, vec![small_url])
         .await
         .inspect_err(|e| {
             warn!("image could not download {link_id}, {e}");

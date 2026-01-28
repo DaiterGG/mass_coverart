@@ -47,8 +47,8 @@ pub enum ImgFormat {
 impl ImgFormat {
     pub fn to_str(&self) -> &'static str {
         match self {
-            Self::Png => ".png",
-            Self::Jpeg => ".jpg",
+            Self::Png => "png",
+            Self::Jpeg => "jpg",
         }
     }
     pub fn imageio(&self) -> ImageFormat {
@@ -234,14 +234,14 @@ impl SongImg {
                 let score = gray_similarity_structure(&MSSIMSimple, a, &b)?.score;
 
                 if score > THRESHOLD {
-                    groups.add_to_group(group_i, all.len(), 1);
+                    groups.add_to_group(group_i, all.len(), self.src.get_weight());
                     self.sample = Some(b);
                     all.push(self);
                     return Ok(());
                 }
             }
         }
-        groups.add_new(all.len(), 1);
+        groups.add_new(all.len(), self.src.get_weight());
         self.sample = Some(b);
         all.push(self);
         Ok(())

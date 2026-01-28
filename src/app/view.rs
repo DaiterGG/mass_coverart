@@ -16,7 +16,8 @@ use iced::{
 use log::info;
 
 use crate::{
-    app::{iced_app::Message, img::ImgId, song::SongId, song_view}, ImgHandle
+    ImgHandle,
+    app::{iced_app::Message, img::ImgId, song::SongId, song_view},
 };
 use crate::{
     TaskHandle,
@@ -62,15 +63,12 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             .wrapping(text::Wrapping::None)
     };
     let btn = |s| button(h3(s).center()).clip(true).height(BTN_HEIGHT);
-    let file_button = btn("file...")
-        .width(50)
-        .style(button_st)
-        .on_press(FileOpenStart);
+    let file_button = btn("file...").width(50).style(button_st).on_press(FileOpen);
     let folder_row = row![
         btn("folder...")
             .width(70)
             .style(button_st)
-            .on_press(FolderOpenStart),
+            .on_press(FolderOpen),
         text("").width(10),
         checkbox("", ui.state.parse_settings.recursive)
             .size(BTN_HEIGHT)
@@ -322,7 +320,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
                         container(
                             btn("save locally...")
                                 .width(110)
-                                .on_press(SaveImgLocallyStart(*song_id, *img_id))
+                                .on_press(SaveImgLocally(*song_id, *img_id))
                                 .style(button_st),
                         )
                         .padding(10.0)

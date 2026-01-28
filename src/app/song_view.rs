@@ -1,6 +1,7 @@
 use crate::{
+    ImgHandle,
     app::{
-        iced_app::{song_is_invalid, CoverUI, Message},
+        iced_app::{CoverUI, Message, song_is_invalid},
         img::ImgId,
         song::{OrigArt, SongId, SongState},
         styles::{
@@ -9,7 +10,7 @@ use crate::{
         },
         view::{BTN_HEIGHT, INNER_TEXT_SIZE, TEXT_SIZE},
     },
-    parser::file_parser::is_rtl, ImgHandle,
+    parser::file_parser::is_rtl,
 };
 use iced::widget::image;
 use iced::widget::scrollable;
@@ -270,6 +271,11 @@ pub fn generate_list_item<'a>(
                         .clip(true)
                         .style(button_st)
                         .on_press(GoBack(id)),
+                    btn("add local image")
+                        .width(Fill)
+                        .clip(true)
+                        .style(button_st)
+                        .on_press(AddLocalImage(id)),
                     btn("remove")
                         .width(Fill)
                         .style(button_st)
@@ -478,7 +484,9 @@ fn orig_img<'a>(ui: &CoverUI, id: SongId, art: &ImgHandle) -> MouseArea<'a, Mess
     if hovered {
         cont = container(stack![
             cont,
-            container(text("delete").size(TEXT_SIZE)).style(image_hover_st).center(Fill),
+            container(text("delete").size(TEXT_SIZE))
+                .style(image_hover_st)
+                .center(Fill),
         ]);
     }
     mouse_area(cont)

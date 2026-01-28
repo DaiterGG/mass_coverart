@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Duration, vec};
+use std::{io::Cursor, path::PathBuf, sync::Arc, time::Duration, vec};
 
 use bytes::Bytes;
 use iced::{
@@ -14,7 +14,11 @@ use tokio::{sync::Semaphore, time::sleep};
 use crate::{
     ImgHandle,
     api::{
-        queue::{Queue, QueueMessage, Source::YoutubeAlbum, TagsInput},
+        queue::{
+            Queue, QueueMessage,
+            Source::{self, YoutubeAlbum},
+            TagsInput,
+        },
         shared,
     },
     app::{
@@ -27,9 +31,9 @@ use crate::{
 };
 #[derive(Clone)]
 pub enum Message {
-    FileOpenStart,
+    FileOpen,
+    FolderOpen,
     PathOpenEnd(Option<Vec<FileHandle>>),
-    FolderOpenStart,
     GotPath(Vec<FileHandle>),
     PushSongs(Vec<Song>),
     PathDropped(Vec<FileHandle>),
@@ -57,6 +61,7 @@ pub enum Message {
 
     // INFO: potentially return imgs into mtx
     FromQueue(SongId, SongHash, QueueMessage),
+    GotArt(SongId, SongHash, SongImg),
     AutoModTrigger,
     ProcessedArt(SongId, SongHash, SongImg),
     Scroll(f32),
@@ -69,10 +74,13 @@ pub enum Message {
     TagToggle(SongId, usize),
     LoadOrigImg(SongId),
     SetOrigImg(ImgHandle, SongId, SongHash),
-    SaveImgLocallyStart(SongId, ImgId),
-    SaveImgLocallyEnd(Option<FileHandle>,SongId, ImgId),
+    SaveImgLocally(SongId, ImgId),
+    SaveImgLocallyEnd(Option<FileHandle>, SongId, ImgId),
     RemoveImageFromFile(SongId),
     OrigImageHover(bool, SongId),
+    AddLocalImage(SongId),
+    AddLocalImageMiddle(SongId, SongHash, Option<Vec<FileHandle>>),
+    AddLocalImageEnd(SongId, SongHash, Vec<u8>, String),
     Start,
     AfterStart,
     Exit,
@@ -84,6 +92,7 @@ pub struct State {
     pub list_scroll: f32,
     pub songs: Vec<Song>,
     pub preview_img: PreviewState,
+    pub preview_client: Client,
     pub ui_blocked: bool,
     pub ui_loading: bool,
     pub parse_settings: ParseSettings,
@@ -184,17 +193,18 @@ impl CoverUI {
                 self.state.songs.extend(songs);
                 info!("{} songs now", self.state.songs.len());
             }
-            FileOpenStart => {
+            FileOpen => {
                 self.state.ui_blocked = true;
 
                 let files = AsyncFileDialog::new()
-                    .add_filter("audio", &["mp3", "m4a"])
-                    .add_filter("all", &["*"])
+                    .set_title("Open image to add")
+                    .add_filter("Audio", &["mp3", "m4a"])
+                    .add_filter("All", &["*"])
                     .set_directory("/")
                     .pick_files();
                 return Task::perform(files, PathOpenEnd);
             }
-            FolderOpenStart => {
+            FolderOpen => {
                 self.state.ui_blocked = true;
                 let files = AsyncFileDialog::new().set_directory("/").pick_folders();
                 return Task::perform(files, PathOpenEnd);
@@ -241,17 +251,21 @@ impl CoverUI {
                 }
             }
             ImgPreviewOpen(song_i, img_id) => {
+                let client = self.state.preview_client.clone();
                 if let ImageProgress::Preview(urls) = &self.state.songs[song_i].imgs[img_id].image {
                     let format = ImgFormat::from_url(urls.first().unwrap());
-                    let (t, h) =
-                        Task::perform(shared::get_img(Client::new(), urls.to_vec()), move |res| {
+                    let urls = urls.to_vec();
+                    let (t, h) = Task::perform(
+                        async move { shared::get_img(&client, urls).await },
+                        move |res| {
                             if let Ok(bytes) = res {
                                 DecodePreview(bytes, format, song_i, img_id)
                             } else {
                                 ImgPreviewSet(PreviewState::Error)
                             }
-                        })
-                        .abortable();
+                        },
+                    )
+                    .abortable();
                     self.state.preview_img = PreviewState::Downloading(h);
                     return t;
                 } else {
@@ -295,17 +309,22 @@ impl CoverUI {
 
                 if let Some(img_id) = song.selected_img {
                     let img = &mut song.imgs[img_id];
+                    let client = self.state.preview_client.clone();
                     let task = if let ImageProgress::Preview(urls) = &img.image {
                         song.state = SongState::MainDownloading;
                         let format = ImgFormat::from_url(urls.first().unwrap());
-                        Task::perform(shared::get_img(Client::new(), urls.to_vec()), move |res| {
-                            if let Ok(bytes) = res {
-                                DecodeAccept(bytes, format, song_id)
-                            } else {
-                                error!("{}", res.unwrap_err());
-                                AcceptFailed(song_id)
-                            }
-                        })
+                        let urls = urls.to_vec();
+                        Task::perform(
+                            async move { shared::get_img(&client, urls).await },
+                            move |res| {
+                                if let Ok(bytes) = res {
+                                    DecodeAccept(bytes, format, song_id)
+                                } else {
+                                    error!("{}", res.unwrap_err());
+                                    AcceptFailed(song_id)
+                                }
+                            },
+                        )
                     } else {
                         song.state = SongState::MainLoading;
                         Task::done(ApplySelected(song_id))
@@ -429,20 +448,7 @@ impl CoverUI {
                 use QueueMessage::*;
                 match mes {
                     GotArt(output) => {
-                        return Task::perform(
-                            SongImg::decode_and_sample(output, self.decode_sem.clone()),
-                            move |res| {
-                                if let Ok(ok) = res {
-                                    ProcessedArt(id, hash, ok)
-                                } else {
-                                    error!(
-                                        "img was not decoded and sapmled: {},",
-                                        res.unwrap_err()
-                                    );
-                                    Nothing
-                                }
-                            },
-                        );
+                        return Task::done(Message::GotArt(id, hash, output));
                     }
                     SetSources(num, out_of) => {
                         self.state.songs[id].sources_finished = (num, out_of);
@@ -465,6 +471,19 @@ impl CoverUI {
                         self.state.songs[id].sources_finished = (now + 1, Queue::TOTAL_SOURCES)
                     }
                 }
+            }
+            GotArt(id, hash, img) => {
+                return Task::perform(
+                    SongImg::decode_and_sample(img, self.decode_sem.clone()),
+                    move |res| {
+                        if let Ok(ok) = res {
+                            ProcessedArt(id, hash, ok)
+                        } else {
+                            error!("img was not decoded and sapmled: {},", res.unwrap_err());
+                            Nothing
+                        }
+                    },
+                );
             }
             AutoModTrigger => {
                 if self.state.auto_mod {
@@ -530,45 +549,106 @@ impl CoverUI {
                 let tag = &mut song.new_tags.sorted[tag_iter];
                 song.selected_tags.toggle(tag.key, Some(tag.value.clone()));
             }
-            SaveImgLocallyStart(song_id, img_id) => {
+            SaveImgLocally(song_id, img_id) => {
                 let song = self
                     .state
                     .songs
                     .get_mut(song_id)
                     .expect("song cannot be deselected when preview open");
-                let mut title = song
-                    .tag_data
-                    .path
-                    .file_name()
-                    .map_or("image".to_string(),
-                        |t| t.to_string_lossy().to_string().rsplit_once('.').expect("music file has extension").0.to_string()
-                    );
-                let ext = self.state.songs[song_id].imgs[img_id].orig_format.to_str();
+                let path = song.tag_data.path.as_path();
+                let root = path.parent().expect("file and has root");
+                let mut title = path.file_name().map_or("image".to_string(), |t| {
+                    t.to_string_lossy()
+                        .to_string()
+                        .rsplit_once('.')
+                        .expect("music file has extension")
+                        .0
+                        .to_string()
+                });
+                let ext = song.imgs[img_id].orig_format.to_str();
+                let mut show_ext = ".".to_string();
+                show_ext.push_str(ext);
+                let show_ext = show_ext.to_uppercase();
                 title.push_str(ext);
                 let files = AsyncFileDialog::new()
-                    .set_title("save image")
+                    .set_title("Save image")
+                    .set_directory(root)
                     .set_file_name(title)
-                    .add_filter(ext, &[ext])
+                    .add_filter(show_ext, &[ext])
+                    .add_filter("All", &["*"])
                     .save_file();
                 return Task::perform(files, move |d| SaveImgLocallyEnd(d, song_id, img_id));
             }
             SaveImgLocallyEnd(data, song_id, img_id) => {
                 if let Some(file_handle) = data {
-                    self.state.songs[song_id].imgs[img_id].decoded().save(file_handle.path()).unwrap();
+                    self.state.songs[song_id].imgs[img_id]
+                        .decoded()
+                        .save(file_handle.path())
+                        .unwrap();
                 }
             }
             RemoveImageFromFile(song_id) => {
                 let song = &mut self.state.songs[song_id];
                 song.tag_data.file.remove_album_cover();
-                let res = song.tag_data.file.write_to_path(song.tag_data.path.to_str().unwrap());
+                let res = song
+                    .tag_data
+                    .file
+                    .write_to_path(song.tag_data.path.to_str().unwrap());
                 if let Err(e) = res {
-                    error!("{}",e);
+                    error!("{}", e);
                     return Task::none();
                 }
                 song.original_art = None;
             }
             OrigImageHover(hovered, song_id) => {
                 self.state.songs[song_id].original_art_hovered = hovered;
+            }
+            AddLocalImage(song_id) => {
+                let song = self
+                    .state
+                    .songs
+                    .get_mut(song_id)
+                    .expect("song cannot be deselected when preview open");
+                let path = song.tag_data.path.as_path();
+                let root = path.parent().expect("file and has root");
+                let files = AsyncFileDialog::new()
+                    .set_title("Open image to add")
+                    .add_filter("Image .JPG/.JPEG, .PNG", &["jpg", "png"])
+                    .add_filter("All", &["*"])
+                    .set_directory(root)
+                    .pick_files();
+                let hash = song.hash;
+                return Task::perform(files, move |d| AddLocalImageMiddle(song_id, hash, d));
+            }
+            AddLocalImageMiddle(id, hash, files) => {
+                if files.is_none() || song_is_invalid(&self.state, id, hash) {
+                    return Task::none();
+                }
+                let mut files = files.unwrap();
+
+                let mut task = Task::none();
+                for _ in 0..files.len() {
+                    let file = files.pop().unwrap();
+                    let path = file.path().to_string_lossy().to_string();
+                    let fut = async move { file.read().await };
+                    task = task.chain(Task::perform(fut, move |vec| {
+                        AddLocalImageEnd(id, hash, vec, path)
+                    }));
+                }
+                return task;
+            }
+            AddLocalImageEnd(id, hash, file, path) => {
+                if song_is_invalid(&self.state, id, hash) {
+                    return Task::none();
+                }
+                let bytes = Bytes::from_owner(file);
+                let img = SongImg::new(
+                    ImgFormat::Jpeg,
+                    ImageProgress::Raw(bytes),
+                    Source::LocalFile,
+                    path,
+                );
+                return Task::done(GotArt(id, hash, img));
             }
             _ => {
                 error!("unhandled message");
