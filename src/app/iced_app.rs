@@ -81,6 +81,7 @@ pub enum Message {
     AddLocalImage(SongId),
     AddLocalImageMiddle(SongId, SongHash, Option<Vec<FileHandle>>),
     AddLocalImageEnd(SongId, SongHash, Vec<u8>, String),
+    SelectFirst(SongId),
     Start,
     AfterStart,
     Exit,
@@ -458,10 +459,7 @@ impl CoverUI {
                                 && !self.state.songs[id].imgs.is_empty()
                                 && self.state.songs[id].selected_img.is_none()
                             {
-                                let first_img_id =
-                                    self.state.songs[id].img_groups.first_in_group(0);
-                                self.state.songs[id].selected_img = Some(first_img_id);
-                                task = task.chain(Task::done(ImgSelect(id, 0)));
+                                task = task.chain(Task::done(SelectFirst(id)));
                             }
                             return task.chain(Task::done(AutoModTrigger));
                         }
@@ -506,13 +504,18 @@ impl CoverUI {
                 }
             }
             ProcessedArt(id, hash, output) => {
+                let mut task = Task::none();
                 if song_is_invalid(&self.state, id, hash) {
-                    return Task::none();
+                    return task;
                 }
                 let song = &mut self.state.songs[id];
+                if output.src == Source::LocalFile {
+                    task = Task::done(SelectFirst(id));
+                }
                 let res = output.push_and_group(&mut song.img_groups, &mut song.imgs);
 
                 let _ = res.inspect_err(|e| warn!("img was not added: {e}"));
+                return task;
             }
             Scroll(scroll_uv) => {
                 self.state.list_scroll = scroll_uv;
@@ -648,7 +651,13 @@ impl CoverUI {
                     Source::LocalFile,
                     path,
                 );
+
                 return Task::done(GotArt(id, hash, img));
+            }
+            SelectFirst(song_id) => {
+                let song = &mut self.state.songs[song_id];
+                let first_id = song.img_groups.first_in_first_group();
+                return Task::done(ImgSelect(song_id, first_id));
             }
             _ => {
                 error!("unhandled message");

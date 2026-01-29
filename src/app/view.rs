@@ -6,7 +6,7 @@ use iced::{
     Length::{Fill, FillPortion},
     alignment::Horizontal::{self},
     widget::{
-        self, column, container,
+        column, container,
         image::Viewer,
         row,
         scrollable::{Direction, Scrollbar},

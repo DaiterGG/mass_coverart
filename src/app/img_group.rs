@@ -2,6 +2,8 @@ use std::ops::Range;
 
 use log::info;
 
+use crate::app::img::SongImg;
+
 #[derive(Debug, Clone)]
 struct ImgGroup {
     weight: i32,
@@ -28,13 +30,28 @@ impl ImgGroups {
     pub fn first_in_group(&self, group_id: usize) -> usize {
         self.groups[group_id].imgs[0]
     }
+    pub fn first_in_first_group(&self) -> usize {
+        self.groups[0].imgs[0]
+    }
     pub fn clear(&mut self) {
         self.groups.clear();
         self.flat.clear();
     }
-    pub fn add_to_group(&mut self, group_id: usize, img_id: usize, img_weight: i32) {
-        self.groups[group_id].weight += img_weight;
-        self.groups[group_id].imgs.push(img_id);
+    pub fn add_to_group(&mut self, group_id: usize, img_id: usize, imgs: &mut Vec<SongImg>) {
+        let new_weight = imgs[img_id].src.get_weight();
+        let group = &mut self.groups[group_id];
+        group.weight += new_weight;
+
+        let mut new_i = self.groups.len();
+        let group = &mut self.groups[group_id].imgs;
+        group.push(img_id);
+
+        while new_i > 0 && new_weight > imgs[group[new_i - 1]].src.get_weight() {
+            let temp = group[new_i - 1];
+            group[new_i - 1] = group[new_i];
+            group[new_i] = temp;
+            new_i -= 1;
+        }
 
         self.sort_groups(group_id);
         self.update_flat();

@@ -191,8 +191,10 @@ impl SongImg {
         let prev = Bytes::from_owner(prev);
         self.preview = Some(Handle::from_rgba(w, h, prev));
 
-        let samp = dyn_img.clone().into_luma8();
-        self.sample = Some(samp);
+        self.sample = match self.src {
+            Source::LocalFile => None,
+            _ => Some(dyn_img.clone().into_luma8()),
+        };
 
         drop(permit);
         Ok(self)
@@ -221,6 +223,7 @@ impl SongImg {
         all: &mut Vec<SongImg>,
     ) -> Result<(), Error> {
         if self.sample.is_none() {
+            groups.add_new(all.len(), self.src.get_weight());
             all.push(self);
             return Ok(());
         }
@@ -234,7 +237,7 @@ impl SongImg {
                 let score = gray_similarity_structure(&MSSIMSimple, a, &b)?.score;
 
                 if score > THRESHOLD {
-                    groups.add_to_group(group_i, all.len(), self.src.get_weight());
+                    groups.add_to_group(group_i, all.len(), all);
                     self.sample = Some(b);
                     all.push(self);
                     return Ok(());
