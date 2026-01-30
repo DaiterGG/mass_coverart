@@ -24,6 +24,7 @@ Cross-platform desktop app for downloading and inserting album art and other tag
 ## Feedback
 
 If you have a suggestion open an issue or write me on discord: \_daiter\_
+Also if you found an album or a track that are missing on all sources, please contact about it
 
 ## Similar apps
 * [Mp3tag](https://www.mp3tag.de)
