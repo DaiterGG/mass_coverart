@@ -82,6 +82,8 @@ pub enum Message {
     AddLocalImageMiddle(SongId, SongHash, Option<Vec<FileHandle>>),
     AddLocalImageEnd(SongId, SongHash, Vec<u8>, String),
     SelectFirst(SongId),
+    CopyImgAbout(SongId, ImgId),
+    ExitAbout,
     Start,
     AfterStart,
     Exit,
@@ -101,6 +103,7 @@ pub struct State {
     pub auto_mod: bool,
     pub auto_mod_current_song: usize,
     pub img_settings: ImageSettings,
+    pub copied_message: bool,
 }
 pub fn song_is_invalid(st: &State, id: SongId, hash: SongHash) -> bool {
     if id >= st.songs.len() || st.songs[id].hash != hash {
@@ -659,6 +662,14 @@ impl CoverUI {
                 let song = &mut self.state.songs[song_id];
                 let first_id = song.img_groups.first_in_first_group();
                 return Task::done(ImgSelect(song_id, first_id));
+            }
+            CopyImgAbout(song_id, img_id) => {
+                let about = self.state.songs[song_id].imgs[img_id].feedback.clone();
+                self.state.copied_message = true;
+                return iced::clipboard::write::<Message>(about);
+            }
+            ExitAbout => {
+                self.state.copied_message = false;
             }
             _ => {
                 error!("unhandled message");

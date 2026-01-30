@@ -18,7 +18,7 @@ Cross-platform desktop app for downloading and inserting album art and other tag
 * Format and insert images into files or download them in your library
 * Support for various file formats: .mp3, .flac, .mp4, .m4a, .m4p, .m4b, .m4r, .m4v
 * Sources supported: 
-  * Scrapers: youtube, youtube.music, bandcamp
+  * Scrapers: youtube, youtube.music, bandcamp, qobuz
   * Official API: musicbrainz
 
 ## Feedback

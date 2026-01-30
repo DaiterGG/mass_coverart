@@ -386,6 +386,11 @@ fn image_box<'a>(ui: &CoverUI, id: SongId, img_iter: ImgId) -> MouseArea<'a, Mes
             .center()
             .width(Fill),
     );
+    let about_txt = if ui.state.copied_message {
+        "copied"
+    } else {
+        "about..."
+    };
     let mut cont = container(stack![
         center(
             image(img.preview.as_ref().unwrap())
@@ -415,16 +420,20 @@ fn image_box<'a>(ui: &CoverUI, id: SongId, img_iter: ImgId) -> MouseArea<'a, Mes
                         )
                         .width(Fill),
                         container(
-                            tooltip(
-                                text("about...").center().size(INNER_TEXT_SIZE),
-                                container(info_col)
-                                    .max_width(500)
-                                    .padding(4)
-                                    .style(select_menu_st),
-                                Position::FollowCursor
+                            mouse_area(
+                                tooltip(
+                                    text(about_txt).center().size(INNER_TEXT_SIZE),
+                                    container(info_col)
+                                        .max_width(500)
+                                        .padding(4)
+                                        .style(select_menu_st),
+                                    Position::FollowCursor
+                                )
+                                .gap(10)
+                                .snap_within_viewport(true)
                             )
-                            .gap(10)
-                            .snap_within_viewport(true)
+                            .on_press(Message::CopyImgAbout(id, img_iter))
+                            .on_exit(Message::ExitAbout)
                         )
                         .center_x(Fill)
                     ]
