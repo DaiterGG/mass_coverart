@@ -15,7 +15,7 @@ Cross-platform desktop app for downloading and inserting album art and other tag
 * Read and modify music related metadata
 * Fetch and preview album covers based on metadata or a file name
 * Group similar images together and sort them for faster search
-* Format and insert images into files or (TODO) download them in your library
+* Format and insert images into files or download them in your library
 * Support for various file formats: .mp3, .flac, .mp4, .m4a, .m4p, .m4b, .m4r, .m4v
 * Sources supported: 
   * Scrapers: youtube, youtube.music, bandcamp

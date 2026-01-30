@@ -1,4 +1,4 @@
-use std::{io::Cursor, path::PathBuf, sync::Arc, time::Duration, vec};
+use std::{ path::PathBuf, sync::Arc, time::Duration, vec};
 
 use bytes::Bytes;
 use iced::{

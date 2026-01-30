@@ -7,13 +7,10 @@ mod parser;
 use app::iced_app::CoverUI;
 use flexi_logger::{Duplicate::Info, FileSpec, LogSpecification, Logger};
 use iced::Size;
-use serde::Deserialize;
 pub type ImgHandle = iced::widget::image::Handle;
 pub type TaskHandle = iced::task::Handle;
 
 // TODO: uncovered: grandson - one step closer
-// musicbrainz test and upgrade
-// add local image
 fn main() -> Result<(), anyhow::Error> {
     #[cfg(debug_assertions)]
     unsafe {
