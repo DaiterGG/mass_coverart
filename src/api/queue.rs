@@ -8,6 +8,7 @@ use crate::{
     api::{
         bandcamp::bandcamp,
         musicbrainz::musicbrainz,
+        qobuz::qobuz,
         shared::send_message,
         yt::{self, youtube},
         yt_music::youtube_music,
@@ -29,6 +30,8 @@ pub enum Source {
     BrainzTitle,
     BandcampAlbum,
     BandcampTitle,
+    QobuzTitle,
+    QobuzAlbum,
     YoutubeMusicAlbum,
     YoutubeMusicTitle,
 }
@@ -41,6 +44,8 @@ impl Source {
             Self::BrainzAlbum => 30,
             Self::BandcampAlbum => 15,
             Self::BandcampTitle => 15,
+            Self::QobuzTitle => 15,
+            Self::QobuzAlbum => 15,
             _ => 10,
         }
     }
@@ -55,6 +60,8 @@ impl Display for Source {
             Self::BrainzTitle => write!(f, "musicbrainz.com (%artist% %title%)"),
             Self::BandcampAlbum => write!(f, "bandcamp.com (%artist% %album%)"),
             Self::BandcampTitle => write!(f, "bandcamp.com (%artist% %title%)"),
+            Self::QobuzTitle => write!(f, "qobuz.com (%artist% %title%)"),
+            Self::QobuzAlbum => write!(f, "qobuz.com (%artist% %album%)"),
             Self::YoutubeMusicAlbum => write!(f, "music.youtube.com (%artist% %album%)"),
             Self::YoutubeMusicTitle => write!(f, "music.youtube.com (%artist% %title%)"),
         }
@@ -96,10 +103,11 @@ impl Queue {
     pub const TOTAL_SOURCES: i32 = 4;
     async fn queue(tags: TagsInput, tx: Sender<Message>) {
         let mut set = JoinSet::new();
-        set.spawn(musicbrainz(tags.clone(), tx.clone()));
-        set.spawn(youtube_music(tags.clone(), tx.clone()));
-        set.spawn(youtube(tags.clone(), tx.clone()));
-        set.spawn(bandcamp(tags.clone(), tx.clone()));
+        // set.spawn(musicbrainz(tags.clone(), tx.clone()));
+        // set.spawn(youtube_music(tags.clone(), tx.clone()));
+        // set.spawn(youtube(tags.clone(), tx.clone()));
+        // set.spawn(bandcamp(tags.clone(), tx.clone()));
+        set.spawn(qobuz(tags.clone(), tx.clone()));
         info!("queue is started for {}", tags.id);
         send_message(
             &tags,

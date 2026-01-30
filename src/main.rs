@@ -11,6 +11,7 @@ pub type ImgHandle = iced::widget::image::Handle;
 pub type TaskHandle = iced::task::Handle;
 
 // TODO: uncovered: grandson - one step closer
+// https://crates.io/crates/qobuz-api-rust
 fn main() -> Result<(), anyhow::Error> {
     #[cfg(debug_assertions)]
     unsafe {

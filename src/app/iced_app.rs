@@ -1,4 +1,4 @@
-use std::{ path::PathBuf, sync::Arc, time::Duration, vec};
+use std::{path::PathBuf, sync::Arc, time::Duration, vec};
 
 use bytes::Bytes;
 use iced::{
@@ -560,7 +560,7 @@ impl CoverUI {
                     .expect("song cannot be deselected when preview open");
                 let path = song.tag_data.path.as_path();
                 let root = path.parent().expect("file and has root");
-                let mut title = path.file_name().map_or("image".to_string(), |t| {
+                let title = path.file_name().map_or("image".to_string(), |t| {
                     t.to_string_lossy()
                         .to_string()
                         .rsplit_once('.')
@@ -572,7 +572,6 @@ impl CoverUI {
                 let mut show_ext = ".".to_string();
                 show_ext.push_str(ext);
                 let show_ext = show_ext.to_uppercase();
-                title.push_str(ext);
                 let files = AsyncFileDialog::new()
                     .set_title("Save image")
                     .set_directory(root)
@@ -607,6 +606,7 @@ impl CoverUI {
                 self.state.songs[song_id].original_art_hovered = hovered;
             }
             AddLocalImage(song_id) => {
+                self.state.ui_blocked = true;
                 let song = self
                     .state
                     .songs
@@ -624,6 +624,7 @@ impl CoverUI {
                 return Task::perform(files, move |d| AddLocalImageMiddle(song_id, hash, d));
             }
             AddLocalImageMiddle(id, hash, files) => {
+                self.state.ui_blocked = false;
                 if files.is_none() || song_is_invalid(&self.state, id, hash) {
                     return Task::none();
                 }

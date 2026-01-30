@@ -37,19 +37,25 @@ impl ImgGroups {
         self.groups.clear();
         self.flat.clear();
     }
-    pub fn add_to_group(&mut self, group_id: usize, img_id: usize, imgs: &mut Vec<SongImg>) {
-        let new_weight = imgs[img_id].src.get_weight();
+    /// * `new_img_id`: id of the img inside imgs
+    /// * `imgs`: required to sort inside group
+    pub fn add_to_group(
+        &mut self,
+        group_id: usize,
+        new_img: &SongImg,
+        new_img_id: usize,
+        imgs: &[SongImg],
+    ) {
+        let new_img_weight = new_img.src.get_weight();
         let group = &mut self.groups[group_id];
-        group.weight += new_weight;
+        group.weight += new_img_weight;
 
-        let mut new_i = self.groups.len();
+        let mut new_i = group.imgs.len();
         let group = &mut self.groups[group_id].imgs;
-        group.push(img_id);
+        group.push(new_img_id);
 
-        while new_i > 0 && new_weight > imgs[group[new_i - 1]].src.get_weight() {
-            let temp = group[new_i - 1];
-            group[new_i - 1] = group[new_i];
-            group[new_i] = temp;
+        while new_i > 0 && new_img_weight > imgs[group[new_i - 1]].src.get_weight() {
+            group.swap(new_i - 1, new_i);
             new_i -= 1;
         }
 
@@ -65,6 +71,16 @@ impl ImgGroups {
         self.sort_groups(self.groups.len() - 1);
         self.update_flat();
     }
+    fn sort_groups(&mut self, group_id: usize) {
+        let mut move_id = group_id;
+        while move_id > 0 && self.groups[move_id - 1].weight < self.groups[group_id].weight {
+            move_id -= 1;
+        }
+        if group_id != move_id {
+            let group = self.groups.remove(group_id);
+            self.groups.insert(move_id, group);
+        }
+    }
     /// update flat copy after adding 1 element
     fn update_flat(&mut self) {
         let mut flat_i = 0;
@@ -76,13 +92,64 @@ impl ImgGroups {
             }
         }
     }
-    fn sort_groups(&mut self, group_id: usize) {
-        let mut move_id = group_id;
-        while move_id > 0 && self.groups[move_id - 1].weight < self.groups[group_id].weight {
-            move_id -= 1;
-        }
-        if group_id != move_id {
-            self.groups.swap(group_id, move_id);
-        }
+}
+#[cfg(test)]
+mod tests {
+    use crate::{
+        api::queue::Source::{BandcampAlbum, LocalFile, YoutubeTitle},
+        app::{
+            img::{ImageProgress::Preview, ImgFormat::Jpeg, SongImg},
+            img_group::{self, ImgGroup, ImgGroups},
+        },
+    };
+
+    #[test]
+    fn sort_g() {
+        let mut img_groups = ImgGroups {
+            groups: vec![
+                ImgGroup {
+                    weight: 15,
+                    imgs: vec![12],
+                },
+                ImgGroup {
+                    weight: 10,
+                    imgs: vec![11],
+                },
+                ImgGroup {
+                    weight: 1000,
+                    imgs: vec![13],
+                },
+            ],
+            flat: vec![12, 10],
+        };
+        img_groups.sort_groups(2);
+        assert_eq!(img_groups.groups[0].weight, 1000);
+        img_groups.update_flat();
+        assert_eq!(img_groups.flat[0], 13);
+    }
+    #[test]
+    fn chain() {
+        let mut img_groups = ImgGroups::new();
+        let img = SongImg::new(Jpeg, Preview(vec![]), YoutubeTitle, "".to_string());
+        let img2 = SongImg::new(Jpeg, Preview(vec![]), BandcampAlbum, "".to_string());
+        let img3 = SongImg::new(Jpeg, Preview(vec![]), LocalFile, "".to_string());
+        let img4 = SongImg::new(Jpeg, Preview(vec![]), YoutubeTitle, "".to_string());
+        let mut imgs = vec![];
+        img_groups.add_new(0, 10);
+        imgs.push(img);
+
+        img_groups.add_new(1, 15);
+        imgs.push(img2);
+
+        let flat = img_groups.flat();
+        assert_eq!((flat[0], flat[1]), (1, 0));
+
+        img_groups.add_new(2, 99999);
+        imgs.push(img3);
+
+        let flat = img_groups.flat();
+        assert_eq!((flat[0], flat[1], flat[2]), (2, 1, 0));
+        img_groups.add_to_group(1, &img4, imgs.len(), &imgs);
+        imgs.push(img4);
     }
 }

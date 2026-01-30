@@ -376,8 +376,11 @@ fn image_box<'a>(ui: &CoverUI, id: SongId, img_iter: ImgId) -> MouseArea<'a, Mes
             .center()
             .width(Fill),
     );
+    let mut feedback = img.feedback.to_string();
+    feedback.push_str("\n img weight: ");
+    feedback.push_str(&img.src.get_weight().to_string());
     info_col = info_col.push(
-        text(img.feedback.to_string())
+        text(feedback)
             .size(INNER_TEXT_SIZE)
             .wrapping(text::Wrapping::Word)
             .center()

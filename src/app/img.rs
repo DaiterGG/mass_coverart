@@ -2,18 +2,14 @@ use audiotags::{MimeType, Picture};
 use bytes::Bytes;
 use image::{DynamicImage, ImageBuffer, ImageFormat, Luma};
 use log::{info, warn};
-use rand::{RngCore, rng};
 
 use crate::{ImgHandle, api::queue::Source, app::img_group::ImgGroups};
 
-use std::{io::Cursor, sync::Arc, time::Instant};
+use std::{io::Cursor, sync::Arc};
 
 use anyhow::{Error, bail};
 use iced::widget::image::Handle;
-use image::{
-    GenericImageView, ImageReader,
-    imageops::FilterType::{Nearest, Triangle},
-};
+use image::{GenericImageView, ImageReader, imageops::FilterType::Triangle};
 use image_compare::{Algorithm::MSSIMSimple, gray_similarity_structure};
 use tokio::{sync::Semaphore, task::yield_now};
 
@@ -45,7 +41,7 @@ pub enum ImgFormat {
     Png,
 }
 impl ImgFormat {
-    pub fn to_str(&self) -> &'static str {
+    pub fn to_str(self) -> &'static str {
         match self {
             Self::Png => "png",
             Self::Jpeg => "jpg",
@@ -192,7 +188,10 @@ impl SongImg {
         self.preview = Some(Handle::from_rgba(w, h, prev));
 
         self.sample = match self.src {
-            Source::LocalFile => None,
+            Source::LocalFile => {
+                info!("local file, skipping sample gen");
+                None
+            }
             _ => Some(dyn_img.clone().into_luma8()),
         };
 
@@ -236,9 +235,10 @@ impl SongImg {
             if let Some(a) = all[groups.first_in_group(group_i)].sample.as_ref() {
                 let score = gray_similarity_structure(&MSSIMSimple, a, &b)?.score;
 
+                info!("threshold: {}", score);
                 if score > THRESHOLD {
-                    groups.add_to_group(group_i, all.len(), all);
                     self.sample = Some(b);
+                    groups.add_to_group(group_i, &self, all.len(), all);
                     all.push(self);
                     return Ok(());
                 }
