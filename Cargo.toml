@@ -5,7 +5,6 @@ edition = "2024"
 authors = ["Daiter"]
 
 [dependencies]
-any = "0.0.1"
 anyhow = "1.0.100"
 audiotags = "0.5.0"
 bytes = "1.10.1"

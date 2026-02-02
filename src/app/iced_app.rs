@@ -162,7 +162,7 @@ impl CoverUI {
                             0,
                         QueueMessage::GotArt(SongImg::new(
                          ImgFormat::Jpeg,
-                         ImageProgress::Raw(Bytes::from_static(include_bytes!("../../foo/2.jpg"))),
+                         ImageProgress::Raw(Bytes::from_static(include_bytes!("../../resources/preview.jpg"))),
                         YoutubeAlbum,
                         "AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA AA ".to_string()
                         ))))
