@@ -12,6 +12,10 @@ pub type TaskHandle = iced::task::Handle;
 
 // TODO: uncovered: grandson - one step closer
 // https://crates.io/crates/qobuz-api-rust
+// https://www.last.fm/api
+// make cross instead of remove
+// make plus/minus icons
+// remake top setting pannel
 fn main() -> Result<(), anyhow::Error> {
     #[cfg(debug_assertions)]
     unsafe {
