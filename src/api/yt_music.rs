@@ -26,11 +26,13 @@ const SEARCH_LIMIT: usize = 20;
 pub async fn youtube_music(tags: TagsInput, tx: Sender<Message>) -> Result<(), Error> {
     let now = Instant::now();
     let client = Client::new();
-    if tags.album.is_some() && tags.artist.is_some() {
+    if let Some(ref album) = tags.album
+        && let Some(ref artist) = tags.artist
+    {
         let prompt = format!(
             r#""{}" "{}" album"#,
-            filter_for_query(tags.artist.as_ref().unwrap()),
-            filter_for_query(tags.album.as_ref().unwrap()),
+            filter_for_query(artist),
+            filter_for_query(album),
         );
         let _ = with_prompt(
             &tags,
@@ -42,11 +44,13 @@ pub async fn youtube_music(tags: TagsInput, tx: Sender<Message>) -> Result<(), E
         .await
         .inspect_err(|e| warn!("request failed: {} {} {e}", tags.id, prompt));
     }
-    if tags.title.is_some() && tags.artist.is_some() {
+    if let Some(ref title) = tags.title
+        && let Some(ref artist) = tags.artist
+    {
         let prompt = format!(
             r#""{}" "{}""#,
-            filter_for_query(tags.artist.as_ref().unwrap()),
-            filter_for_query(tags.title.as_ref().unwrap()),
+            filter_for_query(artist),
+            filter_for_query(title),
         );
         with_prompt(
             &tags,
@@ -137,6 +141,7 @@ async fn get_img(
         format!("https://img.youtube.com/vi/{}/sd2.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sd3.jpg", link_id),
         format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
+        format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id),
     ];
     let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
 
