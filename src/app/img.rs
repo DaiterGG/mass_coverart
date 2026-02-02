@@ -235,7 +235,6 @@ impl SongImg {
             if let Some(a) = all[groups.first_in_group(group_i)].sample.as_ref() {
                 let score = gray_similarity_structure(&MSSIMSimple, a, &b)?.score;
 
-                info!("threshold: {}", score);
                 if score > THRESHOLD {
                     self.sample = Some(b);
                     groups.add_to_group(group_i, &self, all.len(), all);

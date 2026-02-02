@@ -69,13 +69,13 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
             .width(70)
             .style(button_st)
             .on_press(FolderOpen),
-        text("").width(10),
-        checkbox("", ui.state.parse_settings.recursive)
+        checkbox(ui.state.parse_settings.recursive)
             .size(BTN_HEIGHT)
             .on_toggle(|_| RecursiveToggle)
             .style(check_st),
         h2("recursive"),
-    ];
+    ]
+    .spacing(10);
     let mut regex = row![];
     if ui.state.parse_settings.parse_file_name {
         let set = &ui.state.parse_settings;
@@ -156,12 +156,13 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         file_button,
         folder_row,
         row![
-            checkbox("", ui.state.parse_settings.parse_file_name)
+            checkbox(ui.state.parse_settings.parse_file_name)
                 .on_toggle(|_| ParseToggle)
                 .size(BTN_HEIGHT)
                 .style(check_st),
             h2("parse file name"),
-        ],
+        ]
+        .spacing(10),
         regex.wrap(),
     ]
     .spacing(10);
@@ -185,7 +186,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         ],
         row![
             h2("crop to square (width)"),
-            checkbox("", ui.state.img_settings.square)
+            checkbox(ui.state.img_settings.square)
                 .on_toggle(|_| SquareToggle)
                 .size(BTN_HEIGHT)
                 .style(check_st),
@@ -193,7 +194,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
         .spacing(10),
         row![
             h2("convert to jpg"),
-            checkbox("", ui.state.img_settings.jpg)
+            checkbox(ui.state.img_settings.jpg)
                 .on_toggle(|_| JpgToggle)
                 .size(BTN_HEIGHT)
                 .style(check_st),
@@ -220,6 +221,7 @@ pub fn view(ui: &CoverUI) -> Element<'_, Message> {
 
     let list = song_view::generate_view_list(ui);
     let list = scrollable(list)
+        .auto_scroll(true)
         .direction(Direction::Vertical(
             Scrollbar::new().margin(0).scroller_width(15),
         ))

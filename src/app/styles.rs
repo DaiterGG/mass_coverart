@@ -1,5 +1,5 @@
 use iced::{
-    Border, Color, Theme, border,
+    Border, Color, Shadow, Theme, Vector, border,
     theme::{
         Custom, Palette,
         palette::{self, Danger, Extended, Pair, Primary, Secondary, Success, Warning},
@@ -8,7 +8,7 @@ use iced::{
         button::{self},
         checkbox::{self},
         container,
-        scrollable::{self, Rail, Scroller},
+        scrollable::{self, AutoScroll, Rail, Scroller},
         text_input, toggler,
     },
 };
@@ -118,12 +118,15 @@ pub fn toggler_st(theme: &Theme, status: toggler::Status) -> toggler::Style {
         _ => palette.secondary.base.color,
     };
     toggler::Style {
-        background: bg,
+        background: iced::Background::Color(bg),
         background_border_width: 1.0,
         background_border_color: border,
-        foreground: nob,
+        foreground: iced::Background::Color(nob),
         foreground_border_width: 2.5,
         foreground_border_color: bg,
+        border_radius: None,
+        text_color: None,
+        padding_ratio: 0.1,
     }
 }
 pub fn check_st(theme: &Theme, status: checkbox::Status) -> checkbox::Style {
@@ -279,13 +282,25 @@ pub fn list_scroll_st(theme: &Theme, status: scrollable::Status) -> scrollable::
             color: p.danger.base.color,
         },
         scroller: Scroller {
-            color: bg,
+            background: iced::Background::Color(bg),
             border: Border {
                 width: 1.0,
                 radius: 10.0.into(),
                 color: p.background.weak.color,
             },
         },
+    };
+    let auto_scroll = AutoScroll {
+        background: p.background.base.color.scale_alpha(0.9).into(),
+        border: border::rounded(u32::MAX)
+            .width(1)
+            .color(p.background.base.text.scale_alpha(0.8)),
+        shadow: Shadow {
+            color: Color::BLACK.scale_alpha(0.7),
+            offset: Vector::ZERO,
+            blur_radius: 2.0,
+        },
+        icon: p.background.base.text.scale_alpha(0.8),
     };
     scrollable::Style {
         container: container::Style {
@@ -300,6 +315,7 @@ pub fn list_scroll_st(theme: &Theme, status: scrollable::Status) -> scrollable::
         gap: None,
         vertical_rail: rail,
         horizontal_rail: rail,
+        auto_scroll,
     }
 }
 
@@ -324,13 +340,26 @@ pub fn img_scroll_st(theme: &Theme, status: scrollable::Status) -> scrollable::S
             color: p.danger.base.color,
         },
         scroller: Scroller {
-            color: bg,
+            background: iced::Background::Color(bg),
             border: Border {
                 width: 1.0,
                 radius: 10.0.into(),
                 color: p.background.weak.color,
             },
         },
+    };
+
+    let auto_scroll = AutoScroll {
+        background: p.background.base.color.scale_alpha(0.9).into(),
+        border: border::rounded(u32::MAX)
+            .width(1)
+            .color(p.background.base.text.scale_alpha(0.8)),
+        shadow: Shadow {
+            color: Color::BLACK.scale_alpha(0.7),
+            offset: Vector::ZERO,
+            blur_radius: 2.0,
+        },
+        icon: p.background.base.text.scale_alpha(0.8),
     };
     scrollable::Style {
         container: container::Style {
@@ -345,6 +374,7 @@ pub fn img_scroll_st(theme: &Theme, status: scrollable::Status) -> scrollable::S
         gap: None,
         vertical_rail: rail,
         horizontal_rail: rail,
+        auto_scroll,
     }
 }
 pub fn blank_button(theme: &Theme, status: button::Status) -> button::Style {

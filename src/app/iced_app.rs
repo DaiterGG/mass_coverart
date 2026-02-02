@@ -148,12 +148,8 @@ impl CoverUI {
         match message {
             Start => {
                 #[cfg(debug_assertions)]
-                return Task::done(GotPath(vec![
-                    PathBuf::new()
-                        .join("D:\\desk\\mass_coverart\\foo\\sub\\")
-                        .into(),
-                ]))
-                .chain(Task::done(AfterStart));
+                return Task::done(GotPath(vec![PathBuf::new().join("./foo/sub/").into()]))
+                    .chain(Task::done(AfterStart));
             }
             AfterStart => {
                 #[cfg(debug_assertions)]
