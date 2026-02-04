@@ -33,6 +33,7 @@ Also, if you find an album or a track that is missing on all sources, please con
 * [AlbumArt](https://sourceforge.net/p/album-art)
 * [MBPickcard](https://picard.musicbrainz.org/)
 * [RustyCOV](https://github.com/UnknownSuperficialNight/RustyCOV)
+* [OneTagger](https://onetagger.github.io/)
 
 ## Implementation details
 
