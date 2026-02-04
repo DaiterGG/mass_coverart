@@ -147,12 +147,12 @@ impl CoverUI {
 
         match message {
             Start => {
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "debug_song")]
                 return Task::done(GotPath(vec![PathBuf::new().join("./foo/sub/").into()]))
                     .chain(Task::done(AfterStart));
             }
             AfterStart => {
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "debug_song")]
                 return Task::future(async {
                     sleep(Duration::from_millis(3000)).await;
                     Nothing
