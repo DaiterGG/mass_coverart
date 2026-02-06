@@ -6,12 +6,12 @@ use tokio::task::JoinSet;
 
 use crate::{
     api::{
-        bandcamp::bandcamp,
-        musicbrainz::musicbrainz,
-        qobuz::qobuz,
-        shared::send_message,
-        yt::{self, youtube},
-        yt_music::youtube_music,
+        bandcamp::Bandcamp,
+        musicbrainz::Musicbrainz,
+        qobuz::Qobuz,
+        shared::{WebSource, send_message, send_message_from_source},
+        yt::{self, Youtube},
+        yt_music::YoutubeMus,
     },
     app::{
         iced_app::Message,
@@ -32,8 +32,8 @@ pub enum Source {
     BandcampTitle,
     QobuzTitle,
     QobuzAlbum,
-    YoutubeMusicAlbum,
-    YoutubeMusicTitle,
+    YoutubeMusAlbum,
+    YoutubeMusTitle,
 }
 impl Source {
     pub fn get_weight(&self) -> i32 {
@@ -62,8 +62,8 @@ impl Display for Source {
             Self::BandcampTitle => write!(f, "bandcamp.com (%artist% %title%)"),
             Self::QobuzTitle => write!(f, "qobuz.com (%artist% %title%)"),
             Self::QobuzAlbum => write!(f, "qobuz.com (%artist% %album%)"),
-            Self::YoutubeMusicAlbum => write!(f, "music.youtube.com (%artist% %album%)"),
-            Self::YoutubeMusicTitle => write!(f, "music.youtube.com (%artist% %title%)"),
+            Self::YoutubeMusAlbum => write!(f, "music.youtube.com (%artist% %album%)"),
+            Self::YoutubeMusTitle => write!(f, "music.youtube.com (%artist% %title%)"),
         }
     }
 }
@@ -103,16 +103,16 @@ impl Queue {
     pub const TOTAL_SOURCES: i32 = 5;
     async fn queue(tags: TagsInput, tx: Sender<Message>) {
         let mut set = JoinSet::new();
-        set.spawn(musicbrainz(tags.clone(), tx.clone()));
-        set.spawn(youtube_music(tags.clone(), tx.clone()));
-        set.spawn(youtube(tags.clone(), tx.clone()));
-        set.spawn(bandcamp(tags.clone(), tx.clone()));
-        set.spawn(qobuz(tags.clone(), tx.clone()));
+        set.spawn(Musicbrainz::init(tags.clone(), tx.clone()));
+        set.spawn(YoutubeMus::init(tags.clone(), tx.clone()));
+        set.spawn(Youtube::init(tags.clone(), tx.clone()));
+        set.spawn(Bandcamp::init(tags.clone(), tx.clone()));
+        set.spawn(Qobuz::init(tags.clone(), tx.clone()));
         info!("queue is started for {}", tags.id);
         send_message(
             &tags,
+            &mut tx.clone(),
             QueueMessage::SetSources(0, Self::TOTAL_SOURCES),
-            tx.clone(),
         )
         .await;
 
@@ -122,8 +122,8 @@ impl Queue {
         info!("queue is joined for {}", tags.id);
         send_message(
             &tags,
+            &mut tx.clone(),
             QueueMessage::SetSources(Self::TOTAL_SOURCES, Self::TOTAL_SOURCES),
-            tx,
         )
         .await;
     }

@@ -1,170 +1,140 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use anyhow::Error;
 use iced::futures::channel::mpsc::Sender;
 use log::{info, warn};
 use regex::Regex;
 use reqwest::Client;
-use tokio::time::Instant;
 
 use crate::{
     api::{
         queue::{
-            QueueMessage,
             Source::{self, *},
             TagsInput,
         },
-        shared::{self, filter_for_query, send_message, send_song},
+        shared::{self, WebSource, send_song},
     },
     app::{
         iced_app::Message,
         img::{ImageProgress, ImgFormat::Jpeg, SongImg},
     },
 };
+pub struct YoutubeMus {
+    tags: TagsInput,
+    tx: Sender<Message>,
+    client: Client,
+}
 
 const SEARCH_LIMIT: usize = 20;
-pub async fn youtube_music(tags: TagsInput, tx: Sender<Message>) -> Result<(), Error> {
-    let now = Instant::now();
-    let client = Client::new();
-    if let Some(ref album) = tags.album
-        && let Some(ref artist) = tags.artist
-    {
-        let prompt = format!(
-            r#""{}" "{}" album"#,
-            filter_for_query(artist),
-            filter_for_query(album),
-        );
-        let _ = with_prompt(
-            &tags,
-            tx.clone(),
-            &prompt,
-            YoutubeMusicAlbum,
-            client.clone(),
-        )
-        .await
-        .inspect_err(|e| warn!("request failed: {} {} {e}", tags.id, prompt));
+impl WebSource for YoutubeMus {
+    fn build_title_pompt(&self, title: &str, artist: &str) -> String {
+        format!(r#""{}" "{}" album"#, artist, title)
     }
-    if let Some(ref title) = tags.title
-        && let Some(ref artist) = tags.artist
-    {
-        let prompt = format!(
-            r#""{}" "{}""#,
-            filter_for_query(artist),
-            filter_for_query(title),
-        );
-        with_prompt(
-            &tags,
-            tx.clone(),
-            &prompt,
-            YoutubeMusicTitle,
-            client.clone(),
-        )
-        .await
-        .inspect_err(|e| warn!("request failed: {} {} {e}", tags.id, prompt))?;
+    fn build_album_pompt(&self, album: &str, artist: &str) -> String {
+        format!(r#""{}" "{}""#, artist, album)
+    }
+    const ALBUM_SOURCE: Source = YoutubeMusAlbum;
+    const TITLE_SOURCE: Source = YoutubeMusTitle;
+
+    fn tags_ref(&self) -> &TagsInput {
+        &self.tags
     }
 
-    info!("finished in {}ms", now.elapsed().as_millis());
-    send_message(&tags, QueueMessage::SourceFinished, tx).await;
-    Ok(())
-}
+    fn tx_ref(&self) -> &Sender<Message> {
+        &self.tx
+    }
+    fn tx_clone(&self) -> Sender<Message> {
+        self.tx.clone()
+    }
+    async fn init(tags: TagsInput, tx: Sender<Message>) -> Result<(), Error> {
+        let this = Self {
+            tags,
+            tx,
+            client: Client::new(),
+        };
+        shared::init_source(this).await?;
+        Ok(())
+    }
+    async fn with_prompt(&self, prompt: &str, src: Source) -> Result<(), Error> {
+        let search_url = format!("https://music.youtube.com/search?q={}", prompt);
 
-async fn with_prompt(
-    tags: &TagsInput,
-    tx: Sender<Message>,
-    prompt: &str,
-    src: Source,
-    client: Client,
-) -> Result<(), Error> {
-    let search_url = format!("https://music.youtube.com/search?q={}", prompt);
+        info!("Fetching youtube music search: {}", search_url);
 
-    info!("Fetching youtube music search: {}", search_url);
+        let search_results_html = self
+            .client
+            .get(&search_url)
+            .header(
+                "User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0",
+            )
+            .send()
+            .await?
+            .text()
+            .await?;
 
-    let search_results_html = client
-        .get(&search_url)
-        .header(
-            "User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0) Gecko/20100101 Firefox/81.0",
-        )
-        .send()
-        .await?
-        .text()
-        .await?;
-
-    let re = Regex::new(
-        r#"\\x22text\\x22:\\x22([^\\]+?)\\x22,\\x22navigationEndpoint.*?\\x22videoId\\x22:\\x22([A-Za-z0-9_-]{11})\\x22"#,
-    )?;
-    let mut results = Vec::new();
-    let mut dedup = HashSet::new();
-    for video_id in re.captures_iter(&search_results_html) {
-        if let (Some(title), Some(id)) = (video_id.get(1), video_id.get(2)) {
-            let title = title.as_str().to_string();
-            let id = id.as_str().to_string();
-            if !dedup.contains(&id) {
-                dedup.insert(id.clone());
-                results.push((title, id));
-            } else {
-                results.last_mut().unwrap().0.push('\n');
-                results.last_mut().unwrap().0.push_str(&title);
+        let re = Regex::new(
+            r#"\\x22text\\x22:\\x22([^\\]+?)\\x22,\\x22navigationEndpoint.*?\\x22videoId\\x22:\\x22([A-Za-z0-9_-]{11})\\x22"#,
+        )?;
+        let mut results = Vec::new();
+        let mut dedup = HashSet::new();
+        for video_id in re.captures_iter(&search_results_html) {
+            if let (Some(title), Some(id)) = (video_id.get(1), video_id.get(2)) {
+                let title = title.as_str().to_string();
+                let id = id.as_str().to_string();
+                if !dedup.contains(&id) {
+                    dedup.insert(id.clone());
+                    results.push((title, id));
+                } else {
+                    results.last_mut().unwrap().0.push('\n');
+                    results.last_mut().unwrap().0.push_str(&title);
+                }
             }
         }
-    }
 
-    let mut i = 0;
-    while i < SEARCH_LIMIT && i < results.len() {
-        let _ = get_img(
-            client.clone(),
-            tags,
-            results[i].0.clone(),
-            results[i].1.clone(),
-            tx.clone(),
-            src,
-        )
-        .await;
-        i += 1;
-    }
+        let mut i = 0;
+        while i < SEARCH_LIMIT && i < results.len() {
+            let _ = self
+                .get_img(results[i].0.clone(), results[i].1.clone(), src)
+                .await;
+            i += 1;
+        }
 
-    Ok(())
+        Ok(())
+    }
 }
+impl YoutubeMus {
+    async fn get_img(&self, title: String, link_id: String, src: Source) -> Result<(), Error> {
+        let url_patterns = vec![
+            format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", link_id),
+            format!("https://img.youtube.com/vi/{}/hq720.jpg", link_id),
+            format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
+            format!("https://img.youtube.com/vi/{}/sd2.jpg", link_id),
+            format!("https://img.youtube.com/vi/{}/sd3.jpg", link_id),
+            format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id),
+        ];
+        let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
 
-async fn get_img(
-    client: Client,
-    tags: &TagsInput,
-    title: String,
-    link_id: String,
-    // mut feedback: String,
-    tx: Sender<Message>,
-    src: Source,
-) -> Result<(), Error> {
-    let url_patterns = vec![
-        format!("https://img.youtube.com/vi/{}/maxresdefault.jpg", link_id),
-        format!("https://img.youtube.com/vi/{}/hq720.jpg", link_id),
-        format!("https://img.youtube.com/vi/{}/sd2.jpg", link_id),
-        format!("https://img.youtube.com/vi/{}/sd3.jpg", link_id),
-        format!("https://img.youtube.com/vi/{}/sddefault.jpg", link_id),
-        format!("https://img.youtube.com/vi/{}/hqdefault.jpg", link_id),
-    ];
-    let small_url = format!("https://img.youtube.com/vi/{}/mqdefault.jpg", link_id);
+        let pic = shared::get_img(&self.client, vec![small_url])
+            .await
+            .inspect_err(|e| {
+                warn!("image could not download {link_id}, {e}");
+            })?;
 
-    let pic = shared::get_img(&client, vec![small_url])
-        .await
-        .inspect_err(|e| {
-            warn!("image could not download {link_id}, {e}");
-        })?;
+        // title scraping is inconsistent
+        // feedback.insert_str(0, "title: ");
+        let mut feedback = "info: ".to_string();
+        feedback.push_str(&title);
+        feedback.push_str("\nurl: https://www.youtube.com/watch?v=");
+        feedback.push_str(&link_id);
 
-    // title scraping is inconsistent
-    // feedback.insert_str(0, "title: ");
-    let mut feedback = "info: ".to_string();
-    feedback.push_str(&title);
-    feedback.push_str("\nurl: https://www.youtube.com/watch?v=");
-    feedback.push_str(&link_id);
+        let new_img = SongImg::new(
+            Jpeg,
+            ImageProgress::RawPreview(url_patterns, pic),
+            src,
+            feedback,
+        );
+        send_song(self, new_img).await;
 
-    let new_img = SongImg::new(
-        Jpeg,
-        ImageProgress::RawPreview(url_patterns, pic),
-        src,
-        feedback,
-    );
-    send_song(new_img, tx.clone(), tags).await;
-
-    Ok(())
+        Ok(())
+    }
 }
